@@ -1,6 +1,6 @@
 import type { CarState, DetectedRect } from './types';
 import type { Mat, MatVector } from '@techstark/opencv-js';
-import { MIN_AREA, OVERLAY_HOLD, BADGE_HOLD, COLOR_CONFIGS } from './config';
+import { MIN_AREA, OVERLAY_HOLD_MS, BADGE_HOLD_FRAMES, COLOR_CONFIGS } from './config';
 import { formatTime, speakText } from './utils';
 import { addLapTime, resetCarTimer, toggleCarDisabled } from './car';
 import { drawDetectionOverlay, drawCountdown, drawWinnerBanner } from './overlays';
@@ -10,12 +10,77 @@ import { recordLap } from './best-laps';
 
 /** Shared OpenCV working matrices, allocated once and reused every frame. */
 interface SharedMats {
-  mask:      Mat;
-  dilated:   Mat;
-  contours:  MatVector;
-  hierarchy: Mat;
-  kernel:    Mat;
-  blockMask: Mat;
+  colorMask:         Mat;
+  dilatedMask:       Mat;
+  contours:          MatVector;
+  hierarchy:         Mat;
+  dilationKernel:    Mat;
+  blockedRangesMask: Mat;
+}
+
+const DILATION_ANCHOR    = new cv.Point(-1, -1);
+const DILATION_ITERATIONS = 2;
+
+/** Build a colour mask for one car, subtracting any blocked HSV ranges. */
+function buildColorMask(
+  hsv: Mat,
+  car: CarState,
+  shared: SharedMats,
+): void {
+  cv.inRange(hsv, car.lowerBound!, car.upperBound!, shared.colorMask);
+
+  // Subtract blocked HSV ranges so they don't trigger false detections
+  for (const entry of blockedEntries) {
+    cv.inRange(hsv, entry.lowerBound, entry.upperBound, shared.blockedRangesMask);
+    cv.bitwise_not(shared.blockedRangesMask, shared.blockedRangesMask);
+    cv.bitwise_and(shared.colorMask, shared.blockedRangesMask, shared.colorMask);
+  }
+}
+
+/** Find all bounding rectangles that meet the minimum area threshold. */
+function findDetectedRectangles(shared: SharedMats): DetectedRect[] {
+  cv.dilate(shared.colorMask, shared.dilatedMask, shared.dilationKernel,
+    DILATION_ANCHOR, DILATION_ITERATIONS);
+  cv.findContours(shared.dilatedMask, shared.contours, shared.hierarchy,
+    cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+
+  const detectedRectangles: DetectedRect[] = [];
+  for (let i = 0; i < shared.contours.size(); i++) {
+    const contour = shared.contours.get(i);
+    const area    = cv.contourArea(contour);
+    if (area >= MIN_AREA) {
+      const rect = cv.boundingRect(contour);
+      detectedRectangles.push({
+        x: rect.x, y: rect.y, width: rect.width, height: rect.height, area,
+      });
+    }
+    contour.delete();
+  }
+  return detectedRectangles;
+}
+
+/** Handle lap recording, race win detection, and lap announcements. */
+function handleDetection(car: CarState, lapTimeMs: number): void {
+  car.lapCount++;
+  addLapTime(car, `Lap ${car.lapCount}: ${formatTime(lapTimeMs)}`);
+  recordLap(COLOR_CONFIGS[car.configKey].label, lapTimeMs);
+
+  if (car.lapCount >= race.lapsTarget) {
+    if (!race.won) {
+      race.won         = true;
+      race.winnerLabel = `${COLOR_CONFIGS[car.configKey].label} won`;
+      race.winnerColor = COLOR_CONFIGS[car.configKey].badgeColor;
+      speakText(`${COLOR_CONFIGS[car.configKey].label} wins`);
+    }
+    toggleCarDisabled(car);
+  } else {
+    if (car.lapCount > race.lastAnnouncedLap) {
+      race.lastAnnouncedLap = car.lapCount;
+      const remaining = race.lapsTarget - car.lapCount;
+      speakText(`${COLOR_CONFIGS[car.configKey].label} ${remaining} lap${remaining === 1 ? '' : 's'} remaining`);
+    }
+    resetCarTimer(car);
+  }
 }
 
 /** Process a single frame of colour detection for one car. */
@@ -26,92 +91,53 @@ function processCarFrame(
   shared: SharedMats,
   now: number,
 ): void {
-  const { mask, dilated, contours, hierarchy, kernel } = shared;
-
   // During cooldown, just hold the last overlay briefly then bail out
   if (now < car.cooldownUntil) {
-    if (now - car.lastDetectedAt < OVERLAY_HOLD) drawDetectionOverlay(ctx, car, car.lastRects);
-    car.badgeEl.classList.add('d-none');
-    car.cooldownBadgeEl.classList.remove('d-none');
+    if (now - car.lastDetectionTimestampMs < OVERLAY_HOLD_MS) {
+      drawDetectionOverlay(ctx, car, car.lastDetectedRects);
+    }
+    car.detectionBadge.classList.add('d-none');
+    car.cooldownBadge.classList.remove('d-none');
     car.wasInCooldown = true;
     return;
   }
 
   if (car.wasInCooldown) {
-    car.badgeHold     = 0;
-    car.wasInCooldown = false;
+    car.badgeHoldFrames = 0;
+    car.wasInCooldown   = false;
   }
-  car.cooldownBadgeEl.classList.add('d-none');
+  car.cooldownBadge.classList.add('d-none');
 
-  // Build colour mask and find contours
-  cv.inRange(hsv, car.lowerBound!, car.upperBound!, mask);
+  // Build colour mask, subtract blocked ranges, and find contours
+  buildColorMask(hsv, car, shared);
+  const detectedRectangles = findDetectedRectangles(shared);
 
-  // Subtract any blocked HSV ranges so they don't trigger detection
-  for (const entry of blockedEntries) {
-    cv.inRange(hsv, entry.lowerBound, entry.upperBound, shared.blockMask);
-    cv.bitwise_not(shared.blockMask, shared.blockMask);
-    cv.bitwise_and(mask, shared.blockMask, mask);
-  }
-
-  cv.dilate(mask, dilated, kernel, new cv.Point(-1, -1), 2);
-  cv.findContours(dilated, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
-
-  const frameRects: DetectedRect[] = [];
-  for (let i = 0; i < contours.size(); i++) {
-    const contour = contours.get(i);
-    const area    = cv.contourArea(contour);
-    if (area >= MIN_AREA) {
-      const r = cv.boundingRect(contour);
-      frameRects.push({ x: r.x, y: r.y, width: r.width, height: r.height, area });
-    }
-    contour.delete();
-  }
-
-  const detected = frameRects.length > 0;
+  const detected = detectedRectangles.length > 0;
 
   if (detected) {
-    car.lastRects      = frameRects;
-    car.lastDetectedAt = now;
+    car.lastDetectedRects        = detectedRectangles;
+    car.lastDetectionTimestampMs = now;
 
     // First frame of a new detection — record lap
-    if (car.badgeHold === 0) {
-      car.lapCount++;
+    if (car.badgeHoldFrames === 0) {
       const lapTimeMs = now - car.timerStart;
-      addLapTime(car, `Lap ${car.lapCount}: ${formatTime(lapTimeMs)}`);
-      recordLap(COLOR_CONFIGS[car.configKey].label, lapTimeMs);
-
-      if (car.lapCount >= race.lapsTarget) {
-        if (!race.won) {
-          race.won         = true;
-          race.winnerLabel = `${COLOR_CONFIGS[car.configKey].label} won`;
-          race.winnerColor = COLOR_CONFIGS[car.configKey].badgeColor;
-          speakText(`${COLOR_CONFIGS[car.configKey].label} wins`);
-        }
-        toggleCarDisabled(car);
-      } else {
-        if (car.lapCount > race.lastAnnouncedLap) {
-          race.lastAnnouncedLap = car.lapCount;
-          const remaining = race.lapsTarget - car.lapCount;
-          speakText(`${COLOR_CONFIGS[car.configKey].label} ${remaining} lap${remaining === 1 ? '' : 's'} remaining`);
-        }
-        resetCarTimer(car);
-      }
+      handleDetection(car, lapTimeMs);
     }
-    car.badgeHold = BADGE_HOLD;
-  } else if (car.badgeHold > 0) {
-    car.badgeHold--;
+    car.badgeHoldFrames = BADGE_HOLD_FRAMES;
+  } else if (car.badgeHoldFrames > 0) {
+    car.badgeHoldFrames--;
   }
 
   // Draw overlay (live or lingering)
   if (detected) {
-    drawDetectionOverlay(ctx, car, frameRects);
-  } else if (now - car.lastDetectedAt < OVERLAY_HOLD) {
-    drawDetectionOverlay(ctx, car, car.lastRects);
+    drawDetectionOverlay(ctx, car, detectedRectangles);
+  } else if (now - car.lastDetectionTimestampMs < OVERLAY_HOLD_MS) {
+    drawDetectionOverlay(ctx, car, car.lastDetectedRects);
   }
 
-  car.badgeEl.classList.toggle(
+  car.detectionBadge.classList.toggle(
     'd-none',
-    !(car.badgeHold > 0 || now - car.lastDetectedAt < OVERLAY_HOLD),
+    !(car.badgeHoldFrames > 0 || now - car.lastDetectionTimestampMs < OVERLAY_HOLD_MS),
   );
 }
 
@@ -122,15 +148,15 @@ export function startDetectionLoop(
   canvas: HTMLCanvasElement,
   ctx: CanvasRenderingContext2D,
 ): void {
-  const rgb      = new cv.Mat();
-  const hsv      = new cv.Mat();
+  const rgbFrame   = new cv.Mat();
+  const hsvFrame   = new cv.Mat();
   const shared: SharedMats = {
-    mask:      new cv.Mat(),
-    dilated:   new cv.Mat(),
-    contours:  new cv.MatVector(),
-    hierarchy: new cv.Mat(),
-    kernel:    cv.Mat.ones(5, 5, cv.CV_8U),
-    blockMask: new cv.Mat(),
+    colorMask:         new cv.Mat(),
+    dilatedMask:       new cv.Mat(),
+    contours:          new cv.MatVector(),
+    hierarchy:         new cv.Mat(),
+    dilationKernel:    cv.Mat.ones(5, 5, cv.CV_8U),
+    blockedRangesMask: new cv.Mat(),
   };
 
   function processFrame(): void {
@@ -145,23 +171,23 @@ export function startDetectionLoop(
     // Timers are frozen at 00.000 until the race is running
     for (const car of cars) {
       if (!car.disabled) {
-        car.timerEl.textContent = race.state === 'running'
+        car.timerElement.textContent = race.state === 'running'
           ? formatTime(now - car.timerStart)
           : '00.000';
       }
     }
 
     if (race.state === 'running') {
-      const src = cv.matFromImageData(ctx.getImageData(0, 0, canvas.width, canvas.height));
-      cv.cvtColor(src, rgb, cv.COLOR_RGBA2RGB);
-      cv.cvtColor(rgb, hsv, cv.COLOR_RGB2HSV);
+      const sourceFrame = cv.matFromImageData(ctx.getImageData(0, 0, canvas.width, canvas.height));
+      cv.cvtColor(sourceFrame, rgbFrame, cv.COLOR_RGBA2RGB);
+      cv.cvtColor(rgbFrame, hsvFrame, cv.COLOR_RGB2HSV);
 
       for (const car of cars) {
         if (car.disabled || !car.lowerBound || !car.upperBound) continue;
-        processCarFrame(car, ctx, hsv, shared, now);
+        processCarFrame(car, ctx, hsvFrame, shared, now);
       }
 
-      src.delete();
+      sourceFrame.delete();
     } else if (race.state === 'countdown') {
       drawCountdown(ctx, canvas, race.countdownValue);
     }
@@ -173,8 +199,9 @@ export function startDetectionLoop(
   requestAnimationFrame(processFrame);
 
   window.addEventListener('unload', () => {
-    [rgb, hsv, shared.mask, shared.dilated, shared.hierarchy, shared.kernel, shared.blockMask]
-      .forEach(m => m.delete());
+    [rgbFrame, hsvFrame, shared.colorMask, shared.dilatedMask,
+     shared.hierarchy, shared.dilationKernel, shared.blockedRangesMask]
+      .forEach(mat => mat.delete());
     shared.contours.delete();
     for (const car of cars) {
       car.lowerBound?.delete();

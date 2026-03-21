@@ -2,6 +2,10 @@ import type { Mat } from '@techstark/opencv-js';
 import type { HsvRange } from './hsv-helper';
 import { hsvToRgb } from './utils';
 
+const SWATCH_WIDTH  = '100px';
+const SWATCH_HEIGHT = '20px';
+
+/** A blocked HSV range with pre-allocated OpenCV bound matrices. */
 export interface BlockedEntry {
   range:      HsvRange;
   lowerBound: Mat;
@@ -15,30 +19,33 @@ export const blockedEntries: BlockedEntry[] = [];
 export function addBlockedEntry(
   range: HsvRange,
   canvas: HTMLCanvasElement,
-  listEl: HTMLElement,
+  listElement: HTMLElement,
 ): void {
-  const h = canvas.height;
-  const w = canvas.width;
+  const canvasHeight = canvas.height;
+  const canvasWidth  = canvas.width;
   const entry: BlockedEntry = {
     range,
-    lowerBound: new cv.Mat(h, w, cv.CV_8UC3, new cv.Scalar(range.hMin, range.sMin, range.vMin)),
-    upperBound: new cv.Mat(h, w, cv.CV_8UC3, new cv.Scalar(range.hMax, range.sMax, range.vMax)),
+    lowerBound: new cv.Mat(canvasHeight, canvasWidth, cv.CV_8UC3,
+      new cv.Scalar(range.hMin, range.sMin, range.vMin)),
+    upperBound: new cv.Mat(canvasHeight, canvasWidth, cv.CV_8UC3,
+      new cv.Scalar(range.hMax, range.sMax, range.vMax)),
   };
   const index = blockedEntries.push(entry) - 1;
-  renderBlockedEntry(entry, index, listEl);
-  listEl.closest('#blocked-section')?.classList.remove('d-none');
+  renderBlockedEntry(entry, index, listElement);
+  listElement.closest('#blocked-section')?.classList.remove('d-none');
 }
 
 /** Remove a blocked range by index, free its Mats, and re-render the list. */
-function removeBlockedEntry(index: number, listEl: HTMLElement): void {
+function removeBlockedEntry(index: number, listElement: HTMLElement): void {
   const [entry] = blockedEntries.splice(index, 1);
   entry.lowerBound.delete();
   entry.upperBound.delete();
-  rerenderList(listEl);
-  if (blockedEntries.length === 0) listEl.closest('#blocked-section')?.classList.add('d-none');
+  rerenderBlockedList(listElement);
+  if (blockedEntries.length === 0) listElement.closest('#blocked-section')?.classList.add('d-none');
 }
 
-function renderBlockedEntry(entry: BlockedEntry, index: number, listEl: HTMLElement): void {
+/** Render a single blocked entry row with colour swatch, range label, and remove button. */
+function renderBlockedEntry(entry: BlockedEntry, index: number, listElement: HTMLElement): void {
   const { range } = entry;
   const row = document.createElement('div');
   row.className = 'd-flex align-items-center gap-2 mb-1';
@@ -47,8 +54,8 @@ function renderBlockedEntry(entry: BlockedEntry, index: number, listEl: HTMLElem
   // Color swatch from HSV midpoint
   const swatch = document.createElement('span');
   swatch.className = 'flex-shrink-0 rounded border';
-  swatch.style.width  = '100px';
-  swatch.style.height = '20px';
+  swatch.style.width   = SWATCH_WIDTH;
+  swatch.style.height  = SWATCH_HEIGHT;
   swatch.style.display = 'inline-block';
   const [r, g, b] = hsvToRgb(
     Math.round((range.hMin + range.hMax) / 2),
@@ -57,33 +64,33 @@ function renderBlockedEntry(entry: BlockedEntry, index: number, listEl: HTMLElem
   );
   swatch.style.backgroundColor = `rgb(${r},${g},${b})`;
 
-  const label = document.createElement('span');
-  label.className    = 'font-monospace small flex-grow-1';
-  label.textContent  = `H: ${range.hMin}–${range.hMax}  S: ${range.sMin}–${range.sMax}  V: ${range.vMin}–${range.vMax}`;
+  const rangeLabel = document.createElement('span');
+  rangeLabel.className   = 'font-monospace small flex-grow-1';
+  rangeLabel.textContent = `H: ${range.hMin}–${range.hMax}  S: ${range.sMin}–${range.sMax}  V: ${range.vMin}–${range.vMax}`;
 
-  const removeBtn = document.createElement('button');
-  removeBtn.className   = 'btn btn-sm btn-outline-danger py-0 px-1 flex-shrink-0';
-  removeBtn.textContent = '×';
-  removeBtn.title       = 'Remove block';
-  removeBtn.addEventListener('click', () => removeBlockedEntry(index, listEl));
+  const removeButton = document.createElement('button');
+  removeButton.className   = 'btn btn-sm btn-outline-danger py-0 px-1 flex-shrink-0';
+  removeButton.textContent = '×';
+  removeButton.title       = 'Remove block';
+  removeButton.addEventListener('click', () => removeBlockedEntry(index, listElement));
 
-  row.append(swatch, label, removeBtn);
-  listEl.appendChild(row);
+  row.append(swatch, rangeLabel, removeButton);
+  listElement.appendChild(row);
 }
 
-/** Rebuild the list element from scratch (called after a removal). */
-function rerenderList(listEl: HTMLElement): void {
-  listEl.innerHTML = '';
-  blockedEntries.forEach((entry, i) => renderBlockedEntry(entry, i, listEl));
+/** Rebuild the blocked list element from scratch (called after a removal). */
+function rerenderBlockedList(listElement: HTMLElement): void {
+  listElement.innerHTML = '';
+  blockedEntries.forEach((entry, i) => renderBlockedEntry(entry, i, listElement));
 }
 
 /** Remove all blocked entries, free their Mats, and clear the list. */
-export function clearAllBlockedEntries(listEl: HTMLElement): void {
+export function clearAllBlockedEntries(listElement: HTMLElement): void {
   for (const entry of blockedEntries) {
     entry.lowerBound.delete();
     entry.upperBound.delete();
   }
   blockedEntries.length = 0;
-  listEl.innerHTML = '';
-  listEl.closest('#blocked-section')?.classList.add('d-none');
+  listElement.innerHTML = '';
+  listElement.closest('#blocked-section')?.classList.add('d-none');
 }

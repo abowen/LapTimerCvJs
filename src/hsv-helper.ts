@@ -4,6 +4,7 @@ import { hsvToRgb } from './utils';
 
 import { addBlockedEntry } from './blocked-ranges';
 
+/** Minimum and maximum HSV values for each channel. */
 export interface HsvRange {
   hMin: number; hMax: number;
   sMin: number; sMax: number;
@@ -11,59 +12,63 @@ export interface HsvRange {
 }
 
 /**
- * Sample a 50×50 region of canvas pixels centred on (cx, cy) and return
+ * Sample a region of canvas pixels centred on (centerX, centerY) and return
  * the per-channel HSV min/max values together with the raw ImageData so
  * callers can render a swatch.
  */
 export function sampleHsvAt(
-  cx: number,
-  cy: number,
+  centerX: number,
+  centerY: number,
   canvas: HTMLCanvasElement,
   ctx: CanvasRenderingContext2D,
 ): { range: HsvRange; imageData: ImageData } {
-  const half = Math.floor(HSV_SAMPLE_SIZE / 2);
-  const x = Math.max(0, Math.min(canvas.width  - 1, cx - half));
-  const y = Math.max(0, Math.min(canvas.height - 1, cy - half));
-  const w = Math.min(HSV_SAMPLE_SIZE, canvas.width  - x);
-  const h = Math.min(HSV_SAMPLE_SIZE, canvas.height - y);
+  const halfSize     = Math.floor(HSV_SAMPLE_SIZE / 2);
+  const sampleX      = Math.max(0, Math.min(canvas.width  - 1, centerX - halfSize));
+  const sampleY      = Math.max(0, Math.min(canvas.height - 1, centerY - halfSize));
+  const sampleWidth  = Math.min(HSV_SAMPLE_SIZE, canvas.width  - sampleX);
+  const sampleHeight = Math.min(HSV_SAMPLE_SIZE, canvas.height - sampleY);
 
-  const imageData = ctx.getImageData(x, y, w, h);
-  const src = cv.matFromImageData(imageData);
-  const rgb = new cv.Mat();
-  const hsv = new cv.Mat();
-  const channels = new cv.MatVector();
+  const imageData = ctx.getImageData(sampleX, sampleY, sampleWidth, sampleHeight);
+  const sourceMat = cv.matFromImageData(imageData);
+  const rgbMat    = new cv.Mat();
+  const hsvMat    = new cv.Mat();
+  const channels  = new cv.MatVector();
 
   try {
-    cv.cvtColor(src, rgb, cv.COLOR_RGBA2RGB);
-    cv.cvtColor(rgb, hsv, cv.COLOR_RGB2HSV);
-    cv.split(hsv, channels);
+    cv.cvtColor(sourceMat, rgbMat, cv.COLOR_RGBA2RGB);
+    cv.cvtColor(rgbMat, hsvMat, cv.COLOR_RGB2HSV);
+    cv.split(hsvMat, channels);
 
-    const hCh = channels.get(0);
-    const sCh = channels.get(1);
-    const vCh = channels.get(2);
+    const hueChannel        = channels.get(0);
+    const saturationChannel = channels.get(1);
+    const valueChannel      = channels.get(2);
 
     const getMinMax = (mat: { data: ArrayLike<number> }): { min: number; max: number } => {
-      const d = mat.data as Uint8Array;
+      const data = mat.data as Uint8Array;
       let lo = 255, hi = 0;
-      for (let i = 0; i < d.length; i++) {
-        if (d[i] < lo) lo = d[i];
-        if (d[i] > hi) hi = d[i];
+      for (let i = 0; i < data.length; i++) {
+        if (data[i] < lo) lo = data[i];
+        if (data[i] > hi) hi = data[i];
       }
       return { min: lo, max: hi };
     };
 
-    const hR = getMinMax(hCh);
-    const sR = getMinMax(sCh);
-    const vR = getMinMax(vCh);
+    const hueRange        = getMinMax(hueChannel);
+    const saturationRange = getMinMax(saturationChannel);
+    const valueRange      = getMinMax(valueChannel);
 
-    hCh.delete(); sCh.delete(); vCh.delete();
+    hueChannel.delete(); saturationChannel.delete(); valueChannel.delete();
 
     return {
-      range: { hMin: hR.min, hMax: hR.max, sMin: sR.min, sMax: sR.max, vMin: vR.min, vMax: vR.max },
+      range: {
+        hMin: hueRange.min,        hMax: hueRange.max,
+        sMin: saturationRange.min,  sMax: saturationRange.max,
+        vMin: valueRange.min,       vMax: valueRange.max,
+      },
       imageData,
     };
   } finally {
-    src.delete(); rgb.delete(); hsv.delete(); channels.delete();
+    sourceMat.delete(); rgbMat.delete(); hsvMat.delete(); channels.delete();
   }
 }
 
@@ -72,100 +77,110 @@ export function sampleHsvAt(
  * a matching option to every car select dropdown already in the DOM.
  */
 function registerCustomColor(name: string, range: HsvRange): void {
-  // Build a unique camelCase key
-  let base = name.toLowerCase().replace(/\s+(.)/g, (_, c: string) => c.toUpperCase())
-                 .replace(/[^a-zA-Z0-9]/g, '');
-  if (!base) base = 'custom';
-  let key = base;
-  let n = 2;
-  while (COLOR_CONFIGS[key]) key = base + n++;
+  let baseKey = name.toLowerCase().replace(/\s+(.)/g, (_, char: string) => char.toUpperCase())
+                    .replace(/[^a-zA-Z0-9]/g, '');
+  if (!baseKey) baseKey = 'custom';
+  let uniqueKey = baseKey;
+  let suffix = 2;
+  while (COLOR_CONFIGS[uniqueKey]) uniqueKey = baseKey + suffix++;
 
   // Derive a representative badge color from the HSV mid-point
-  const midH = Math.round((range.hMin + range.hMax) / 2);
-  const midS = Math.round((range.sMin + range.sMax) / 2);
-  const midV = Math.round((range.vMin + range.vMax) / 2);
-  const [r, g, b] = hsvToRgb(midH, midS, midV);
-  const toHex = (v: number) => v.toString(16).padStart(2, '0');
-  const badgeColor = `#${toHex(r)}${toHex(g)}${toHex(b)}`;
-  const luminance  = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-  const labelColor = luminance > 0.5 ? '#333333' : '#ffffff';
+  const midHue        = Math.round((range.hMin + range.hMax) / 2);
+  const midSaturation = Math.round((range.sMin + range.sMax) / 2);
+  const midValue      = Math.round((range.vMin + range.vMax) / 2);
+  const [r, g, b]     = hsvToRgb(midHue, midSaturation, midValue);
+  const toHex         = (value: number) => value.toString(16).padStart(2, '0');
+  const badgeColor    = `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+  const luminance     = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  const labelColor    = luminance > 0.5 ? '#333333' : '#ffffff';
 
-  const cfg: ColorConfig = { label: name, badgeColor, labelColor, ...range };
-  COLOR_CONFIGS[key] = cfg;
+  const colorConfig: ColorConfig = { label: name, badgeColor, labelColor, ...range };
+  COLOR_CONFIGS[uniqueKey] = colorConfig;
+}
+
+/** HSV input field references for the six range values. */
+interface HsvRangeInputs {
+  hMin: HTMLInputElement; hMax: HTMLInputElement;
+  sMin: HTMLInputElement; sMax: HTMLInputElement;
+  vMin: HTMLInputElement; vMax: HTMLInputElement;
+}
+
+/** References to the save/block panel elements. */
+interface SavePanelElements {
+  nameInput:       HTMLInputElement;
+  saveButton:      HTMLButtonElement;
+  blockButton:     HTMLButtonElement;
+  blockedListElement: HTMLElement;
+  canvasReference: HTMLCanvasElement;
 }
 
 /**
- * Attach click/touch listeners to the canvas.  On each interaction, sample
+ * Attach click/touch listeners to the canvas. On each interaction, sample
  * the HSV range and update the helper UI elements.
  */
 export function initHsvHelper(
   canvas: HTMLCanvasElement,
   ctx: CanvasRenderingContext2D,
-  resultEl: HTMLDivElement,
-  swatchEl: HTMLCanvasElement,
-  spans: { hMin: HTMLInputElement; hMax: HTMLInputElement; sMin: HTMLInputElement; sMax: HTMLInputElement; vMin: HTMLInputElement; vMax: HTMLInputElement },
-  saveEls: {
-    nameInputEl: HTMLInputElement;
-    saveBtnEl:   HTMLButtonElement;
-    hideBtnEl:   HTMLButtonElement;
-    blockedListEl: HTMLElement;
-    canvasRef:   HTMLCanvasElement;
-  },
+  resultElement: HTMLDivElement,
+  swatchCanvas: HTMLCanvasElement,
+  hsvInputs: HsvRangeInputs,
+  savePanel: SavePanelElements,
 ): void {
-  let lastRange: HsvRange | null = null;
-
-  const handle = (clientX: number, clientY: number): void => {
-    const rect = canvas.getBoundingClientRect();
-    const cx = Math.round((clientX - rect.left) * (canvas.width  / rect.width));
-    const cy = Math.round((clientY - rect.top)  * (canvas.height / rect.height));
-
-    const { range, imageData } = sampleHsvAt(cx, cy, canvas, ctx);
-    lastRange = range;
-
-    spans.hMin.value = String(range.hMin);
-    spans.hMax.value = String(range.hMax);
-    spans.sMin.value = String(range.sMin);
-    spans.sMax.value = String(range.sMax);
-    spans.vMin.value = String(range.vMin);
-    spans.vMax.value = String(range.vMax);
-
-    const tmp = document.createElement('canvas');
-    tmp.width  = imageData.width;
-    tmp.height = imageData.height;
-    tmp.getContext('2d')!.putImageData(imageData, 0, 0);
-    swatchEl.getContext('2d')!.drawImage(tmp, 0, 0, swatchEl.width, swatchEl.height);
-
-    resultEl.classList.remove('d-none');
-  };
+  let lastSampledRange: HsvRange | null = null;
 
   /** Read the current HSV range from the input fields. */
   function readRangeFromInputs(): HsvRange {
     return {
-      hMin: parseInt(spans.hMin.value, 10) || 0,
-      hMax: parseInt(spans.hMax.value, 10) || 0,
-      sMin: parseInt(spans.sMin.value, 10) || 0,
-      sMax: parseInt(spans.sMax.value, 10) || 0,
-      vMin: parseInt(spans.vMin.value, 10) || 0,
-      vMax: parseInt(spans.vMax.value, 10) || 0,
+      hMin: parseInt(hsvInputs.hMin.value, 10) || 0,
+      hMax: parseInt(hsvInputs.hMax.value, 10) || 0,
+      sMin: parseInt(hsvInputs.sMin.value, 10) || 0,
+      sMax: parseInt(hsvInputs.sMax.value, 10) || 0,
+      vMin: parseInt(hsvInputs.vMin.value, 10) || 0,
+      vMax: parseInt(hsvInputs.vMax.value, 10) || 0,
     };
   }
 
-  saveEls.saveBtnEl.addEventListener('click', () => {
-    if (!lastRange) return;
-    const name = saveEls.nameInputEl.value.trim();
+  const handleCanvasInteraction = (clientX: number, clientY: number): void => {
+    const canvasRect = canvas.getBoundingClientRect();
+    const pixelX = Math.round((clientX - canvasRect.left) * (canvas.width  / canvasRect.width));
+    const pixelY = Math.round((clientY - canvasRect.top)  * (canvas.height / canvasRect.height));
+
+    const { range, imageData } = sampleHsvAt(pixelX, pixelY, canvas, ctx);
+    lastSampledRange = range;
+
+    hsvInputs.hMin.value = String(range.hMin);
+    hsvInputs.hMax.value = String(range.hMax);
+    hsvInputs.sMin.value = String(range.sMin);
+    hsvInputs.sMax.value = String(range.sMax);
+    hsvInputs.vMin.value = String(range.vMin);
+    hsvInputs.vMax.value = String(range.vMax);
+
+    // Render the sampled region as a preview swatch
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width  = imageData.width;
+    tempCanvas.height = imageData.height;
+    tempCanvas.getContext('2d')!.putImageData(imageData, 0, 0);
+    swatchCanvas.getContext('2d')!.drawImage(tempCanvas, 0, 0, swatchCanvas.width, swatchCanvas.height);
+
+    resultElement.classList.remove('d-none');
+  };
+
+  savePanel.saveButton.addEventListener('click', () => {
+    if (!lastSampledRange) return;
+    const name = savePanel.nameInput.value.trim();
     if (!name) return;
     registerCustomColor(name, readRangeFromInputs());
-    saveEls.nameInputEl.value = '';
+    savePanel.nameInput.value = '';
   });
 
-  saveEls.hideBtnEl.addEventListener('click', () => {
-    if (!lastRange) return;
-    addBlockedEntry(readRangeFromInputs(), saveEls.canvasRef, saveEls.blockedListEl);
+  savePanel.blockButton.addEventListener('click', () => {
+    if (!lastSampledRange) return;
+    addBlockedEntry(readRangeFromInputs(), savePanel.canvasReference, savePanel.blockedListElement);
   });
 
-  canvas.addEventListener('click', (e) => handle(e.clientX, e.clientY));
-  canvas.addEventListener('touchstart', (e) => {
-    e.preventDefault();
-    handle(e.touches[0].clientX, e.touches[0].clientY);
+  canvas.addEventListener('click', (event) => handleCanvasInteraction(event.clientX, event.clientY));
+  canvas.addEventListener('touchstart', (event) => {
+    event.preventDefault();
+    handleCanvasInteraction(event.touches[0].clientX, event.touches[0].clientY);
   }, { passive: false });
 }

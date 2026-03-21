@@ -1,5 +1,5 @@
 /** Create a typed DOM element with an optional CSS class string. */
-export function el<K extends keyof HTMLElementTagNameMap>(
+export function createElement<K extends keyof HTMLElementTagNameMap>(
   tag: K,
   className = '',
 ): HTMLElementTagNameMap[K] {
@@ -10,36 +10,46 @@ export function el<K extends keyof HTMLElementTagNameMap>(
 
 /** Format milliseconds as a SS.mmm stopwatch string. */
 export function formatTime(ms: number): string {
-  const t      = Math.max(0, ms);
-  const secs   = Math.floor(t / 1000);
-  const millis = Math.floor(t % 1000);
-  return `${String(secs).padStart(2, '0')}.${String(millis).padStart(3, '0')}`;
+  const clampedMs = Math.max(0, ms);
+  const seconds   = Math.floor(clampedMs / 1000);
+  const millis    = Math.floor(clampedMs % 1000);
+  return `${String(seconds).padStart(2, '0')}.${String(millis).padStart(3, '0')}`;
 }
 
-/** Convert OpenCV HSV (H 0–179, S/V 0–255) to sRGB (0–255 each). */
+/**
+ * Convert OpenCV HSV (H 0–179, S/V 0–255) to sRGB (0–255 each).
+ * Uses the standard HSV-to-RGB sector-based conversion algorithm.
+ */
 export function hsvToRgb(h: number, s: number, v: number): [number, number, number] {
-  const hDeg = h * 2;
-  const sn   = s / 255;
-  const vn   = v / 255;
-  const c    = vn * sn;
-  const x    = c * (1 - Math.abs(((hDeg / 60) % 2) - 1));
-  const m    = vn - c;
+  const hueDegrees     = h * 2;
+  const saturationNorm = s / 255;
+  const valueNorm      = v / 255;
+  const chroma         = valueNorm * saturationNorm;
+  const secondary      = chroma * (1 - Math.abs(((hueDegrees / 60) % 2) - 1));
+  const lightnessMatch = valueNorm - chroma;
   let r = 0, g = 0, b = 0;
-  if      (hDeg < 60)  { r = c; g = x; b = 0; }
-  else if (hDeg < 120) { r = x; g = c; b = 0; }
-  else if (hDeg < 180) { r = 0; g = c; b = x; }
-  else if (hDeg < 240) { r = 0; g = x; b = c; }
-  else if (hDeg < 300) { r = x; g = 0; b = c; }
-  else                 { r = c; g = 0; b = x; }
-  return [Math.round((r + m) * 255), Math.round((g + m) * 255), Math.round((b + m) * 255)];
+  if      (hueDegrees < 60)  { r = chroma; g = secondary; b = 0; }
+  else if (hueDegrees < 120) { r = secondary; g = chroma; b = 0; }
+  else if (hueDegrees < 180) { r = 0; g = chroma; b = secondary; }
+  else if (hueDegrees < 240) { r = 0; g = secondary; b = chroma; }
+  else if (hueDegrees < 300) { r = secondary; g = 0; b = chroma; }
+  else                       { r = chroma; g = 0; b = secondary; }
+  return [
+    Math.round((r + lightnessMatch) * 255),
+    Math.round((g + lightnessMatch) * 255),
+    Math.round((b + lightnessMatch) * 255),
+  ];
 }
 
-/** Speak text via the Web Speech API (no-op if unavailable). */
+const SPEECH_RATE  = 0.9;
+const SPEECH_PITCH = 1.0;
+
+/** Speak text via the Web Speech API, cancelling any previous speech. No-op if unavailable. */
 export function speakText(text: string): void {
   if (!('speechSynthesis' in window)) return;
   window.speechSynthesis.cancel();
   const utterance = new SpeechSynthesisUtterance(text);
-  utterance.rate  = 0.9;
-  utterance.pitch = 1.0;
+  utterance.rate  = SPEECH_RATE;
+  utterance.pitch = SPEECH_PITCH;
   window.speechSynthesis.speak(utterance);
 }

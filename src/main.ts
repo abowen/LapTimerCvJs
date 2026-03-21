@@ -2,7 +2,7 @@ import 'bootstrap/dist/css/bootstrap.min.css';
 import 'bootstrap/dist/js/bootstrap.bundle.min.js';
 import './style.css';
 import type { CarState } from './types';
-import { DEFAULT_CAR_COLORS, COLOR_CONFIGS } from './config';
+import { DEFAULT_CAR_COLORS, COLOR_CONFIGS, DEFAULT_PROFILE_NAME, STORAGE_KEY_PROFILES } from './config';
 import { setMinArea, setCooldownMs, setHsvSampleSize } from './config';
 import { startCamera, waitForOpenCV } from './camera';
 import { drawCarRangeBar } from './overlays';
@@ -33,41 +33,41 @@ import type { Profile } from './profiles';
 // ---------------------------------------------------------------------------
 // DOM references
 // ---------------------------------------------------------------------------
-const video     = document.getElementById('video')      as HTMLVideoElement;
-const canvas    = document.getElementById('canvas')     as HTMLCanvasElement;
-const ctx       = canvas.getContext('2d')!;
-const statusEl  = document.getElementById('status')     as HTMLParagraphElement;
-const carsTable = document.getElementById('cars-table') as HTMLDivElement;
-const startBtn  = document.getElementById('start-btn')  as HTMLButtonElement;
-const lapsInput = document.getElementById('laps-input') as HTMLInputElement;
-const profileSelect    = document.getElementById('profile-select')     as HTMLSelectElement;
-const saveProfileBtn   = document.getElementById('save-profile-btn')   as HTMLButtonElement;
-const copyProfileBtn   = document.getElementById('copy-profile-btn')   as HTMLButtonElement;
-const addProfileBtn    = document.getElementById('add-profile-btn')    as HTMLButtonElement;
-const coloursListEl    = document.getElementById('colours-list')       as HTMLElement;
-const blockedListEl    = document.getElementById('blocked-list')       as HTMLElement;
-const cfgMinAreaInput  = document.getElementById('cfg-min-area')       as HTMLInputElement;
-const cfgCooldownInput = document.getElementById('cfg-cooldown')       as HTMLInputElement;
-const cfgHsvSizeInput  = document.getElementById('cfg-hsv-size')       as HTMLInputElement;
-const deleteProfileBtn = document.getElementById('delete-profile-btn') as HTMLButtonElement;
-const exportBtn        = document.getElementById('export-btn')         as HTMLButtonElement;
-const importFileInput  = document.getElementById('import-file')        as HTMLInputElement;
-const importStatusEl   = document.getElementById('import-status')      as HTMLParagraphElement;
-const bestOverallList  = document.getElementById('best-overall-list')   as HTMLElement;
-const bestDriverList   = document.getElementById('best-driver-list')    as HTMLElement;
-const clearAllLapsBtn  = document.getElementById('clear-all-laps-btn') as HTMLButtonElement;
+const video              = document.getElementById('video')              as HTMLVideoElement;
+const canvas             = document.getElementById('canvas')             as HTMLCanvasElement;
+const ctx                = canvas.getContext('2d')!;
+const statusElement      = document.getElementById('status')             as HTMLParagraphElement;
+const carsTable          = document.getElementById('cars-table')         as HTMLDivElement;
+const startButton        = document.getElementById('start-btn')          as HTMLButtonElement;
+const lapsInput          = document.getElementById('laps-input')         as HTMLInputElement;
+const profileSelect      = document.getElementById('profile-select')     as HTMLSelectElement;
+const saveProfileButton  = document.getElementById('save-profile-btn')   as HTMLButtonElement;
+const copyProfileButton  = document.getElementById('copy-profile-btn')   as HTMLButtonElement;
+const addProfileButton   = document.getElementById('add-profile-btn')    as HTMLButtonElement;
+const colorsListElement  = document.getElementById('colours-list')       as HTMLElement;
+const blockedListElement = document.getElementById('blocked-list')       as HTMLElement;
+const configMinAreaInput = document.getElementById('cfg-min-area')       as HTMLInputElement;
+const configCooldownInput = document.getElementById('cfg-cooldown')      as HTMLInputElement;
+const configHsvSizeInput = document.getElementById('cfg-hsv-size')       as HTMLInputElement;
+const deleteProfileButton = document.getElementById('delete-profile-btn') as HTMLButtonElement;
+const exportButton       = document.getElementById('export-btn')         as HTMLButtonElement;
+const importFileInput    = document.getElementById('import-file')        as HTMLInputElement;
+const importStatusElement = document.getElementById('import-status')     as HTMLParagraphElement;
+const bestOverallLapsList = document.getElementById('best-overall-list') as HTMLElement;
+const bestPerDriverLapsList = document.getElementById('best-driver-list') as HTMLElement;
+const clearAllLapsButton = document.getElementById('clear-all-laps-btn') as HTMLButtonElement;
 
 const cars: CarState[] = [];
 
-function setStatus(msg: string): void {
-  statusEl.textContent = msg;
+function setStatus(message: string): void {
+  statusElement.textContent = message;
 }
 
 /** Destroy all existing cars and recreate from a list of color keys. */
-function rebuildCarsFromKeys(keys: string[]): void {
+function rebuildCarsFromKeys(colorKeys: string[]): void {
   while (cars.length > 0) destroyCar(cars.pop()!);
-  for (const key of keys) {
-    const car = createCarColumn(key, carsTable);
+  for (const colorKey of colorKeys) {
+    const car = createCarColumn(colorKey, carsTable);
     rebuildCarBounds(car, canvas);
     updateCarColour(car);
     requestAnimationFrame(() => drawCarRangeBar(car));
@@ -76,27 +76,27 @@ function rebuildCarsFromKeys(keys: string[]): void {
 }
 
 /** Toggle a colour's car on or off when the Driver Configuration checkbox changes. */
-function handleColorToggle(key: string, enabled: boolean): void {
+function handleColorToggle(colorKey: string, enabled: boolean): void {
   if (enabled) {
-    const car = createCarColumn(key, carsTable);
+    const car = createCarColumn(colorKey, carsTable);
     rebuildCarBounds(car, canvas);
     updateCarColour(car);
     requestAnimationFrame(() => drawCarRangeBar(car));
     cars.push(car);
   } else {
-    const idx = cars.findIndex(c => c.configKey === key);
-    if (idx >= 0) {
-      destroyCar(cars[idx]);
-      cars.splice(idx, 1);
+    const carIndex = cars.findIndex(car => car.configKey === colorKey);
+    if (carIndex >= 0) {
+      destroyCar(cars[carIndex]);
+      cars.splice(carIndex, 1);
     }
   }
 }
 
 /** Apply a profile, rebuild cars, and re-render the colours list. */
-function switchToProfile(name: string): void {
-  const keys = applyProfile(name, canvas, blockedListEl);
-  if (keys) rebuildCarsFromKeys(keys);
-  renderColoursList(coloursListEl, cars, handleColorToggle);
+function switchToProfile(profileName: string): void {
+  const colorKeys = applyProfile(profileName, canvas, blockedListElement);
+  if (colorKeys) rebuildCarsFromKeys(colorKeys);
+  renderColoursList(colorsListElement, cars, handleColorToggle);
 }
 
 // ---------------------------------------------------------------------------
@@ -119,11 +119,11 @@ async function init(): Promise<void> {
       vMax: document.getElementById('hsv-v-max') as HTMLInputElement,
     },
     {
-      nameInputEl:   document.getElementById('hsv-name-input')  as HTMLInputElement,
-      saveBtnEl:     document.getElementById('hsv-save-btn')     as HTMLButtonElement,
-      hideBtnEl:     document.getElementById('hsv-hide-btn')     as HTMLButtonElement,
-      blockedListEl: document.getElementById('blocked-list')     as HTMLElement,
-      canvasRef:     canvas,
+      nameInput:          document.getElementById('hsv-name-input')  as HTMLInputElement,
+      saveButton:         document.getElementById('hsv-save-btn')    as HTMLButtonElement,
+      blockButton:        document.getElementById('hsv-hide-btn')    as HTMLButtonElement,
+      blockedListElement: document.getElementById('blocked-list')    as HTMLElement,
+      canvasReference:    canvas,
     },
   );
   for (const colorKey of DEFAULT_CAR_COLORS) {
@@ -135,132 +135,132 @@ async function init(): Promise<void> {
   }
 
   // Profiles: create Demo if missing, otherwise load it and rebuild cars
-  const profileKeys = ensureDefaultProfile(cars, canvas, blockedListEl);
+  const profileKeys = ensureDefaultProfile(cars, canvas, blockedListElement);
   if (profileKeys) rebuildCarsFromKeys(profileKeys);
   populateProfileDropdown(profileSelect);
-  const savedProfile = loadSelectedProfile();
-  profileSelect.value = savedProfile;
-  // If the saved profile no longer exists, fall back to Demo
-  if (profileSelect.value !== savedProfile) profileSelect.value = 'Demo';
+  const savedProfileName = loadSelectedProfile();
+  profileSelect.value = savedProfileName;
+  // If the saved profile no longer exists, fall back to default
+  if (profileSelect.value !== savedProfileName) profileSelect.value = DEFAULT_PROFILE_NAME;
   switchToProfile(profileSelect.value);
-  renderColoursList(coloursListEl, cars, handleColorToggle);
+  renderColoursList(colorsListElement, cars, handleColorToggle);
 
   profileSelect.addEventListener('change', () => {
     switchToProfile(profileSelect.value);
     saveSelectedProfile(profileSelect.value);
   });
 
-  saveProfileBtn.addEventListener('click', () => {
-    const name = profileSelect.value;
-    if (!name) return;
-    saveCurrentProfile(name, cars);
+  saveProfileButton.addEventListener('click', () => {
+    const profileName = profileSelect.value;
+    if (!profileName) return;
+    saveCurrentProfile(profileName, cars);
   });
 
-  copyProfileBtn.addEventListener('click', () => {
-    const name = prompt('New profile name (copy of current):');
-    if (!name || !name.trim()) return;
-    const trimmed = name.trim();
-    saveCurrentProfile(trimmed, cars);
+  copyProfileButton.addEventListener('click', () => {
+    const inputName = prompt('New profile name (copy of current):');
+    if (!inputName || !inputName.trim()) return;
+    const profileName = inputName.trim();
+    saveCurrentProfile(profileName, cars);
     populateProfileDropdown(profileSelect);
-    profileSelect.value = trimmed;
-    saveSelectedProfile(trimmed);
-    updateDeleteBtn();
+    profileSelect.value = profileName;
+    saveSelectedProfile(profileName);
+    updateDeleteButton();
   });
 
-  addProfileBtn.addEventListener('click', () => {
-    const name = prompt('New profile name:');
-    if (!name || !name.trim()) return;
-    const trimmed = name.trim();
+  addProfileButton.addEventListener('click', () => {
+    const inputName = prompt('New profile name:');
+    if (!inputName || !inputName.trim()) return;
+    const profileName = inputName.trim();
     // Destroy all existing cars and clear colours for a blank profile
     while (cars.length > 0) destroyCar(cars.pop()!);
     for (const key of Object.keys(COLOR_CONFIGS)) delete COLOR_CONFIGS[key];
-    saveCurrentProfile(trimmed, cars);
+    saveCurrentProfile(profileName, cars);
     populateProfileDropdown(profileSelect);
-    profileSelect.value = trimmed;
-    saveSelectedProfile(trimmed);
-    renderColoursList(coloursListEl, cars, handleColorToggle);
-    updateDeleteBtn();
+    profileSelect.value = profileName;
+    saveSelectedProfile(profileName);
+    renderColoursList(colorsListElement, cars, handleColorToggle);
+    updateDeleteButton();
   });
 
   // Re-render colours list when a custom colour is saved via the HSV helper
   // and auto-enable the newly added colour
   document.getElementById('hsv-save-btn')!.addEventListener('click', () => {
     for (const key of Object.keys(COLOR_CONFIGS)) {
-      if (!cars.some(c => c.configKey === key)) {
+      if (!cars.some(car => car.configKey === key)) {
         handleColorToggle(key, true);
       }
     }
-    renderColoursList(coloursListEl, cars, handleColorToggle);
+    renderColoursList(colorsListElement, cars, handleColorToggle);
   });
 
-  startBtn.addEventListener('click', () => {
+  startButton.addEventListener('click', () => {
     if (race.state === 'idle') {
-      startRace(cars, startBtn, lapsInput);
+      startRace(cars, startButton, lapsInput);
       profileSelect.disabled = true;
-      deleteProfileBtn.disabled = true;
+      deleteProfileButton.disabled = true;
     } else if (race.state === 'running') {
-      resetRace(cars, startBtn, lapsInput);
+      resetRace(cars, startButton, lapsInput);
       profileSelect.disabled = false;
-      updateDeleteBtn();
+      updateDeleteButton();
     }
   });
 
   setStatus('Ready — press Start to begin the race!');
   startDetectionLoop(cars, video, canvas, ctx);
 
-  cfgMinAreaInput.addEventListener('change', () => {
-    const v = parseInt(cfgMinAreaInput.value, 10);
-    if (!isNaN(v)) setMinArea(v);
+  configMinAreaInput.addEventListener('change', () => {
+    const parsedValue = parseInt(configMinAreaInput.value, 10);
+    if (!isNaN(parsedValue)) setMinArea(parsedValue);
   });
 
-  cfgCooldownInput.addEventListener('change', () => {
-    const v = parseInt(cfgCooldownInput.value, 10);
-    if (!isNaN(v)) setCooldownMs(v);
+  configCooldownInput.addEventListener('change', () => {
+    const parsedValue = parseInt(configCooldownInput.value, 10);
+    if (!isNaN(parsedValue)) setCooldownMs(parsedValue);
   });
 
-  cfgHsvSizeInput.addEventListener('change', () => {
-    const v = parseInt(cfgHsvSizeInput.value, 10);
-    if (!isNaN(v)) setHsvSampleSize(v);
+  configHsvSizeInput.addEventListener('change', () => {
+    const parsedValue = parseInt(configHsvSizeInput.value, 10);
+    if (!isNaN(parsedValue)) setHsvSampleSize(parsedValue);
   });
 
   // Update delete button state based on profile count
-  function updateDeleteBtn(): void {
-    const count = Object.keys(loadProfiles()).length;
-    deleteProfileBtn.disabled = count <= 1;
+  function updateDeleteButton(): void {
+    const profileCount = Object.keys(loadProfiles()).length;
+    deleteProfileButton.disabled = profileCount <= 1;
   }
-  updateDeleteBtn();
+  updateDeleteButton();
 
-  deleteProfileBtn.addEventListener('click', () => {
-    const name = profileSelect.value;
-    if (!name) return;
+  deleteProfileButton.addEventListener('click', () => {
+    const profileName = profileSelect.value;
+    if (!profileName) return;
     const profiles = loadProfiles();
     if (Object.keys(profiles).length <= 1) return;
-    if (!confirm(`Delete profile "${name}"?`)) return;
-    deleteProfileByName(name);
+    if (!confirm(`Delete profile "${profileName}"?`)) return;
+    deleteProfileByName(profileName);
     populateProfileDropdown(profileSelect);
-    const first = profileSelect.options[0]?.value;
-    if (first) {
-      profileSelect.value = first;
-      switchToProfile(first);
-      saveSelectedProfile(first);
+    const firstProfileName = profileSelect.options[0]?.value;
+    if (firstProfileName) {
+      profileSelect.value = firstProfileName;
+      switchToProfile(firstProfileName);
+      saveSelectedProfile(firstProfileName);
     }
-    updateDeleteBtn();
+    updateDeleteButton();
   });
 
   // Export current profile as JSON download
-  exportBtn.addEventListener('click', () => {
-    const name = profileSelect.value || 'Demo';
+  exportButton.addEventListener('click', () => {
+    const profileName = profileSelect.value || DEFAULT_PROFILE_NAME;
     const profiles = loadProfiles();
-    const profile = profiles[name];
+    const profile = profiles[profileName];
     if (!profile) return;
 
     const blob = new Blob([JSON.stringify(profile, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${name}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+    const downloadUrl = URL.createObjectURL(blob);
+    const downloadLink = document.createElement('a');
+    downloadLink.href = downloadUrl;
+    downloadLink.download = `${profileName}.json`;
+    downloadLink.click();
+    URL.revokeObjectURL(downloadUrl);
   });
 
   // Import a profile JSON file
@@ -271,27 +271,27 @@ async function init(): Promise<void> {
     const reader = new FileReader();
     reader.onload = () => {
       try {
-        const data = JSON.parse(reader.result as string) as Profile;
-        if (!data.colors || !data.carAssignments) {
+        const profileData = JSON.parse(reader.result as string) as Profile;
+        if (!profileData.colors || !profileData.carAssignments) {
           throw new Error('Invalid profile: missing colors or carAssignments');
         }
 
-        const name = file.name.replace(/\.json$/i, '');
+        const profileName = file.name.replace(/\.json$/i, '');
         const profiles = loadProfiles();
-        profiles[name] = data;
-        localStorage.setItem('lapTimerProfiles', JSON.stringify(profiles));
+        profiles[profileName] = profileData;
+        localStorage.setItem(STORAGE_KEY_PROFILES, JSON.stringify(profiles));
 
         populateProfileDropdown(profileSelect);
-        profileSelect.value = name;
-        switchToProfile(name);
+        profileSelect.value = profileName;
+        switchToProfile(profileName);
 
-        importStatusEl.textContent = `Imported profile "${name}"`;
-        importStatusEl.className = 'small text-success mb-0';
-        importStatusEl.classList.remove('d-none');
+        importStatusElement.textContent = `Imported profile "${profileName}"`;
+        importStatusElement.className = 'small text-success mb-0';
+        importStatusElement.classList.remove('d-none');
       } catch (err) {
-        importStatusEl.textContent = `Import failed: ${String(err)}`;
-        importStatusEl.className = 'small text-danger mb-0';
-        importStatusEl.classList.remove('d-none');
+        importStatusElement.textContent = `Import failed: ${String(err)}`;
+        importStatusElement.className = 'small text-danger mb-0';
+        importStatusElement.classList.remove('d-none');
       }
       importFileInput.value = '';
     };
@@ -300,9 +300,9 @@ async function init(): Promise<void> {
 
   // Best Laps panels
   function refreshBestLaps(): void {
-    renderOverallBestLaps(bestOverallList);
-    renderPerDriverBestLaps(bestDriverList, (driver) => {
-      clearDriverLapRecords(driver);
+    renderOverallBestLaps(bestOverallLapsList);
+    renderPerDriverBestLaps(bestPerDriverLapsList, (driverName) => {
+      clearDriverLapRecords(driverName);
       refreshBestLaps();
     });
   }
@@ -310,7 +310,7 @@ async function init(): Promise<void> {
   refreshBestLaps();
   onLapRecorded(refreshBestLaps);
 
-  clearAllLapsBtn.addEventListener('click', () => {
+  clearAllLapsButton.addEventListener('click', () => {
     clearAllLapRecords();
     refreshBestLaps();
   });

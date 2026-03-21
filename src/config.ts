@@ -1,5 +1,19 @@
 import type { ColorConfig } from './types';
 
+// ---------------------------------------------------------------------------
+// localStorage keys (centralised to avoid duplication)
+// ---------------------------------------------------------------------------
+export const STORAGE_KEY_PROFILES         = 'lapTimerProfiles';
+export const STORAGE_KEY_SELECTED_PROFILE = 'lapTimerSelectedProfile';
+export const STORAGE_KEY_BEST_LAPS        = 'lapTimerBestLaps';
+
+/** Profile name used when no saved selection exists. */
+export const DEFAULT_PROFILE_NAME = 'Demo';
+
+// ---------------------------------------------------------------------------
+// Detection tuning (runtime-adjustable)
+// ---------------------------------------------------------------------------
+
 /** Minimum contour area (px²) to count as a detection. */
 export let MIN_AREA = 6000;
 
@@ -7,28 +21,32 @@ export let MIN_AREA = 6000;
 export let COOLDOWN_MS = 5000;
 
 /** Update the minimum detection area at runtime. */
-export function setMinArea(val: number): void {
-  MIN_AREA = Math.max(1, val);
+export function setMinArea(value: number): void {
+  MIN_AREA = Math.max(1, value);
 }
 
 /** Update the cooldown duration at runtime. */
-export function setCooldownMs(val: number): void {
-  COOLDOWN_MS = Math.max(0, val);
+export function setCooldownMs(value: number): void {
+  COOLDOWN_MS = Math.max(0, value);
 }
 
 /** Size of the HSV sample area in pixels (width & height). */
 export let HSV_SAMPLE_SIZE = 50;
 
 /** Update the HSV sample area size at runtime. */
-export function setHsvSampleSize(val: number): void {
-  HSV_SAMPLE_SIZE = Math.max(1, val);
+export function setHsvSampleSize(value: number): void {
+  HSV_SAMPLE_SIZE = Math.max(1, value);
 }
 
-/** How long the bounding box lingers after detection (ms). */
-export const OVERLAY_HOLD = 2000;
+// ---------------------------------------------------------------------------
+// Detection timing constants
+// ---------------------------------------------------------------------------
 
-/** Frames the "Detected!" badge stays visible. */
-export const BADGE_HOLD = 6;
+/** How long the bounding box lingers after detection (ms). */
+export const OVERLAY_HOLD_MS = 2000;
+
+/** Number of frames the "Detected!" badge stays visible. */
+export const BADGE_HOLD_FRAMES = 6;
 
 /** Default colour assignment for the six car columns. */
 export const DEFAULT_CAR_COLORS = [

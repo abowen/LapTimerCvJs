@@ -1,16 +1,25 @@
-const STORAGE_KEY = 'lapTimerBestLaps';
+import { STORAGE_KEY_BEST_LAPS } from './config';
+
+const TOP_OVERALL_LAPS_COUNT   = 10;
+const TOP_PER_DRIVER_LAPS_COUNT = 5;
+
+const RANK_COLUMN_MIN_WIDTH    = '24px';
+const DRIVER_COLUMN_MIN_WIDTH  = '90px';
 
 /** A single recorded lap. */
 export interface LapRecord {
+  /** Driver name (typically the colour label). */
   driver: string;
+  /** Lap duration in milliseconds. */
   lapTimeMs: number;
+  /** Unix timestamp (ms) when the lap was recorded. */
   timestamp: number;
 }
 
 /** Load all lap records from localStorage. */
 export function loadLapRecords(): LapRecord[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(STORAGE_KEY_BEST_LAPS);
     return raw ? JSON.parse(raw) : [];
   } catch {
     return [];
@@ -19,15 +28,15 @@ export function loadLapRecords(): LapRecord[] {
 
 /** Persist lap records to localStorage. */
 function persistLapRecords(records: LapRecord[]): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+  localStorage.setItem(STORAGE_KEY_BEST_LAPS, JSON.stringify(records));
 }
 
 /** Optional callback invoked after a lap is recorded. */
 let onRecordCallback: (() => void) | null = null;
 
 /** Register a callback that fires whenever a lap is recorded. */
-export function onLapRecorded(cb: () => void): void {
-  onRecordCallback = cb;
+export function onLapRecorded(callback: () => void): void {
+  onRecordCallback = callback;
 }
 
 /** Record a new lap. */
@@ -40,137 +49,136 @@ export function recordLap(driver: string, lapTimeMs: number): void {
 
 /** Clear all lap records. */
 export function clearAllLapRecords(): void {
-  localStorage.removeItem(STORAGE_KEY);
+  localStorage.removeItem(STORAGE_KEY_BEST_LAPS);
 }
 
 /** Clear lap records for a specific driver. */
 export function clearDriverLapRecords(driver: string): void {
-  const records = loadLapRecords().filter(r => r.driver !== driver);
+  const records = loadLapRecords().filter(lapRecord => lapRecord.driver !== driver);
   persistLapRecords(records);
 }
 
-/** Format milliseconds as ss.mm */
+/** Format milliseconds as ss.cc (seconds and centiseconds). */
 function formatLapTime(ms: number): string {
-  const t = Math.max(0, ms);
-  const secs = Math.floor(t / 1000);
-  const centis = Math.floor((t % 1000) / 10);
-  return `${String(secs).padStart(2, '0')}.${String(centis).padStart(2, '0')}`;
+  const clampedMs    = Math.max(0, ms);
+  const seconds      = Math.floor(clampedMs / 1000);
+  const centiseconds = Math.floor((clampedMs % 1000) / 10);
+  return `${String(seconds).padStart(2, '0')}.${String(centiseconds).padStart(2, '0')}`;
 }
 
-/** Format a timestamp as a short date/time string. */
-function formatTimestamp(ts: number): string {
-  const d = new Date(ts);
-  return d.toLocaleString(undefined, {
+/** Format a Unix timestamp as a short human-readable date/time string. */
+function formatTimestamp(unixMs: number): string {
+  const date = new Date(unixMs);
+  return date.toLocaleString(undefined, {
     month: 'short', day: 'numeric',
     hour: '2-digit', minute: '2-digit',
   });
 }
 
-/** Render the top 10 overall fastest laps panel. */
-export function renderOverallBestLaps(listEl: HTMLElement): void {
+/** Render the top overall fastest laps panel. */
+export function renderOverallBestLaps(listElement: HTMLElement): void {
   const records = loadLapRecords()
     .sort((a, b) => a.lapTimeMs - b.lapTimeMs)
-    .slice(0, 10);
+    .slice(0, TOP_OVERALL_LAPS_COUNT);
 
-  listEl.innerHTML = '';
+  listElement.innerHTML = '';
 
   if (records.length === 0) {
-    listEl.innerHTML = '<p class="text-muted small mb-0 text-center">No laps recorded yet</p>';
+    listElement.innerHTML = '<p class="text-muted small mb-0 text-center">No laps recorded yet</p>';
     return;
   }
 
   for (let i = 0; i < records.length; i++) {
-    const rec = records[i];
+    const lapRecord = records[i];
     const row = document.createElement('div');
     row.className = 'd-flex align-items-center gap-2 mb-1 small';
 
-    const rank = document.createElement('span');
-    rank.className = 'text-muted';
-    rank.style.minWidth = '24px';
-    rank.textContent = `${i + 1}.`;
+    const rankElement = document.createElement('span');
+    rankElement.className = 'text-muted';
+    rankElement.style.minWidth = RANK_COLUMN_MIN_WIDTH;
+    rankElement.textContent = `${i + 1}.`;
 
-    const driver = document.createElement('span');
-    driver.className = 'fw-semibold';
-    driver.style.minWidth = '90px';
-    driver.textContent = rec.driver;
+    const driverElement = document.createElement('span');
+    driverElement.className = 'fw-semibold';
+    driverElement.style.minWidth = DRIVER_COLUMN_MIN_WIDTH;
+    driverElement.textContent = lapRecord.driver;
 
-    const time = document.createElement('span');
-    time.className = 'font-monospace flex-grow-1';
-    time.textContent = formatLapTime(rec.lapTimeMs);
+    const timeElement = document.createElement('span');
+    timeElement.className = 'font-monospace flex-grow-1';
+    timeElement.textContent = formatLapTime(lapRecord.lapTimeMs);
 
-    const ts = document.createElement('span');
-    ts.className = 'text-muted';
-    ts.textContent = formatTimestamp(rec.timestamp);
+    const timestampElement = document.createElement('span');
+    timestampElement.className = 'text-muted';
+    timestampElement.textContent = formatTimestamp(lapRecord.timestamp);
 
-    row.append(rank, driver, time, ts);
-    listEl.appendChild(row);
+    row.append(rankElement, driverElement, timeElement, timestampElement);
+    listElement.appendChild(row);
   }
 }
 
-/** Render the top 5 fastest laps per driver panel. */
+/** Render the top fastest laps per driver panel. */
 export function renderPerDriverBestLaps(
-  listEl: HTMLElement,
+  listElement: HTMLElement,
   onClear: (driver: string) => void,
 ): void {
   const records = loadLapRecords();
 
   // Group by driver
-  const byDriver = new Map<string, LapRecord[]>();
-  for (const rec of records) {
-    if (!byDriver.has(rec.driver)) byDriver.set(rec.driver, []);
-    byDriver.get(rec.driver)!.push(rec);
+  const lapsByDriver = new Map<string, LapRecord[]>();
+  for (const lapRecord of records) {
+    if (!lapsByDriver.has(lapRecord.driver)) lapsByDriver.set(lapRecord.driver, []);
+    lapsByDriver.get(lapRecord.driver)!.push(lapRecord);
   }
 
-  listEl.innerHTML = '';
+  listElement.innerHTML = '';
 
-  if (byDriver.size === 0) {
-    listEl.innerHTML = '<p class="text-muted small mb-0 text-center">No laps recorded yet</p>';
+  if (lapsByDriver.size === 0) {
+    listElement.innerHTML = '<p class="text-muted small mb-0 text-center">No laps recorded yet</p>';
     return;
   }
 
-  // Sort drivers alphabetically
-  const drivers = [...byDriver.keys()].sort();
+  const sortedDriverNames = [...lapsByDriver.keys()].sort();
 
-  for (const driver of drivers) {
-    const laps = byDriver.get(driver)!
+  for (const driverName of sortedDriverNames) {
+    const driverLaps = lapsByDriver.get(driverName)!
       .sort((a, b) => a.lapTimeMs - b.lapTimeMs)
-      .slice(0, 5);
+      .slice(0, TOP_PER_DRIVER_LAPS_COUNT);
 
     const header = document.createElement('div');
     header.className = 'd-flex align-items-center gap-2 mb-1';
 
-    const name = document.createElement('span');
-    name.className = 'small fw-semibold flex-grow-1';
-    name.textContent = driver;
+    const nameElement = document.createElement('span');
+    nameElement.className = 'small fw-semibold flex-grow-1';
+    nameElement.textContent = driverName;
 
-    const clearBtn = document.createElement('button');
-    clearBtn.className = 'btn btn-sm btn-outline-danger py-0 px-1';
-    clearBtn.textContent = 'Clear';
-    clearBtn.addEventListener('click', () => onClear(driver));
+    const clearButton = document.createElement('button');
+    clearButton.className = 'btn btn-sm btn-outline-danger py-0 px-1';
+    clearButton.textContent = 'Clear';
+    clearButton.addEventListener('click', () => onClear(driverName));
 
-    header.append(name, clearBtn);
-    listEl.appendChild(header);
+    header.append(nameElement, clearButton);
+    listElement.appendChild(header);
 
-    for (let i = 0; i < laps.length; i++) {
-      const rec = laps[i];
+    for (let i = 0; i < driverLaps.length; i++) {
+      const lapRecord = driverLaps[i];
       const row = document.createElement('div');
       row.className = 'd-flex align-items-center gap-2 mb-1 small ps-2';
 
-      const rank = document.createElement('span');
-      rank.className = 'text-muted';
-      rank.style.minWidth = '24px';
-      rank.textContent = `${i + 1}.`;
+      const rankElement = document.createElement('span');
+      rankElement.className = 'text-muted';
+      rankElement.style.minWidth = RANK_COLUMN_MIN_WIDTH;
+      rankElement.textContent = `${i + 1}.`;
 
-      const time = document.createElement('span');
-      time.className = 'font-monospace flex-grow-1';
-      time.textContent = formatLapTime(rec.lapTimeMs);
+      const timeElement = document.createElement('span');
+      timeElement.className = 'font-monospace flex-grow-1';
+      timeElement.textContent = formatLapTime(lapRecord.lapTimeMs);
 
-      const ts = document.createElement('span');
-      ts.className = 'text-muted';
-      ts.textContent = formatTimestamp(rec.timestamp);
+      const timestampElement = document.createElement('span');
+      timestampElement.className = 'text-muted';
+      timestampElement.textContent = formatTimestamp(lapRecord.timestamp);
 
-      row.append(rank, time, ts);
-      listEl.appendChild(row);
+      row.append(rankElement, timeElement, timestampElement);
+      listElement.appendChild(row);
     }
   }
 }

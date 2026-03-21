@@ -1,20 +1,17 @@
 import type { CarState, ColorConfig } from './types';
 import type { HsvRange } from './hsv-helper';
-import { COLOR_CONFIGS } from './config';
+import { COLOR_CONFIGS, STORAGE_KEY_PROFILES, STORAGE_KEY_SELECTED_PROFILE, DEFAULT_PROFILE_NAME } from './config';
 import { destroyCar } from './car';
 import { blockedEntries, addBlockedEntry, clearAllBlockedEntries } from './blocked-ranges';
 
-const STORAGE_KEY = 'lapTimerProfiles';
-const SELECTED_PROFILE_KEY = 'lapTimerSelectedProfile';
-
 /** Save the currently selected profile name to local storage. */
 export function saveSelectedProfile(name: string): void {
-  localStorage.setItem(SELECTED_PROFILE_KEY, name);
+  localStorage.setItem(STORAGE_KEY_SELECTED_PROFILE, name);
 }
 
-/** Load the previously selected profile name, falling back to 'Demo'. */
+/** Load the previously selected profile name, falling back to the default. */
 export function loadSelectedProfile(): string {
-  return localStorage.getItem(SELECTED_PROFILE_KEY) || 'Demo';
+  return localStorage.getItem(STORAGE_KEY_SELECTED_PROFILE) || DEFAULT_PROFILE_NAME;
 }
 
 /** A saved profile containing colour configurations, car assignments, and blocked ranges. */
@@ -27,7 +24,7 @@ export interface Profile {
 /** Load all saved profiles from localStorage. */
 export function loadProfiles(): Record<string, Profile> {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(STORAGE_KEY_PROFILES);
     return raw ? JSON.parse(raw) : {};
   } catch {
     return {};
@@ -36,20 +33,20 @@ export function loadProfiles(): Record<string, Profile> {
 
 /** Persist the profiles map to localStorage. */
 function persistProfiles(profiles: Record<string, Profile>): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(profiles));
+  localStorage.setItem(STORAGE_KEY_PROFILES, JSON.stringify(profiles));
 }
 
 /** Save the current colour configs, car assignments, and blocked ranges as a named profile. */
 export function saveCurrentProfile(name: string, cars: CarState[]): void {
   const profiles = loadProfiles();
   const colors: Record<string, ColorConfig> = {};
-  for (const [key, cfg] of Object.entries(COLOR_CONFIGS)) {
-    colors[key] = { ...cfg };
+  for (const [key, colorConfig] of Object.entries(COLOR_CONFIGS)) {
+    colors[key] = { ...colorConfig };
   }
   profiles[name] = {
     colors,
-    carAssignments: cars.map(c => c.configKey),
-    blockedRanges: blockedEntries.map(e => ({ ...e.range })),
+    carAssignments: cars.map(car => car.configKey),
+    blockedRanges: blockedEntries.map(entry => ({ ...entry.range })),
   };
   persistProfiles(profiles);
 }
@@ -68,7 +65,7 @@ export function deleteProfileByName(name: string): void {
 export function applyProfile(
   profileName: string,
   canvas: HTMLCanvasElement,
-  blockedListEl: HTMLElement,
+  blockedListElement: HTMLElement,
 ): string[] | null {
   const profiles = loadProfiles();
   const profile = profiles[profileName];
@@ -76,94 +73,95 @@ export function applyProfile(
 
   // Replace COLOR_CONFIGS with the profile's colours
   for (const key of Object.keys(COLOR_CONFIGS)) delete COLOR_CONFIGS[key];
-  for (const [key, cfg] of Object.entries(profile.colors)) {
-    COLOR_CONFIGS[key] = { ...cfg };
+  for (const [key, colorConfig] of Object.entries(profile.colors)) {
+    COLOR_CONFIGS[key] = { ...colorConfig };
   }
 
   // Restore blocked HSV ranges (only when the profile includes the field)
   if (profile.blockedRanges !== undefined) {
-    clearAllBlockedEntries(blockedListEl);
+    clearAllBlockedEntries(blockedListElement);
     for (const range of profile.blockedRanges) {
-      addBlockedEntry(range, canvas, blockedListEl);
+      addBlockedEntry(range, canvas, blockedListElement);
     }
   }
 
-  return profile.carAssignments.filter(k => COLOR_CONFIGS[k]);
+  // Filter out any car assignments whose colour no longer exists
+  return profile.carAssignments.filter(colorKey => COLOR_CONFIGS[colorKey]);
 }
 
 /** Remove a colour from COLOR_CONFIGS and destroy its car if one exists. */
 export function removeColour(
   key: string,
   cars: CarState[],
-  listEl: HTMLElement,
-  onToggle: (key: string, enabled: boolean) => void,
+  listElement: HTMLElement,
+  onCarColorToggle: (key: string, enabled: boolean) => void,
 ): void {
   if (Object.keys(COLOR_CONFIGS).length <= 1) return;
 
   delete COLOR_CONFIGS[key];
 
-  const idx = cars.findIndex(c => c.configKey === key);
-  if (idx >= 0) {
-    destroyCar(cars[idx]);
-    cars.splice(idx, 1);
+  const carIndex = cars.findIndex(car => car.configKey === key);
+  if (carIndex >= 0) {
+    destroyCar(cars[carIndex]);
+    cars.splice(carIndex, 1);
   }
 
-  renderColoursList(listEl, cars, onToggle);
+  renderColoursList(listElement, cars, onCarColorToggle);
 }
 
 /** Render the available colours list with enabled checkboxes and delete buttons. */
 export function renderColoursList(
-  listEl: HTMLElement,
+  listElement: HTMLElement,
   cars: CarState[],
-  onToggle: (key: string, enabled: boolean) => void,
+  onCarColorToggle: (key: string, enabled: boolean) => void,
 ): void {
-  listEl.innerHTML = '';
+  listElement.innerHTML = '';
 
-  for (const [key, cfg] of Object.entries(COLOR_CONFIGS)) {
+  for (const [key, colorConfig] of Object.entries(COLOR_CONFIGS)) {
     const row = document.createElement('div');
     row.className = 'd-flex align-items-center gap-2 mb-1';
 
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox';
     checkbox.className = 'form-check-input flex-shrink-0';
-    checkbox.checked = cars.some(c => c.configKey === key);
+    checkbox.checked = cars.some(car => car.configKey === key);
     checkbox.title = 'Enable / disable car';
     checkbox.addEventListener('change', () => {
-      onToggle(key, checkbox.checked);
+      onCarColorToggle(key, checkbox.checked);
     });
 
     const swatch = document.createElement('span');
     swatch.className = 'flex-shrink-0 rounded border';
     swatch.style.cssText = 'width:100px;height:20px;display:inline-block';
-    swatch.style.backgroundColor = cfg.badgeColor;
+    swatch.style.backgroundColor = colorConfig.badgeColor;
 
     const label = document.createElement('span');
     label.className = 'small flex-grow-1';
-    label.textContent = cfg.label;
+    label.textContent = colorConfig.label;
 
-    const removeBtn = document.createElement('button');
-    removeBtn.className = 'btn btn-sm btn-outline-danger py-0 px-1 flex-shrink-0';
-    removeBtn.textContent = '×';
-    removeBtn.title = 'Remove colour';
-    removeBtn.addEventListener('click', () => removeColour(key, cars, listEl, onToggle));
+    const removeButton = document.createElement('button');
+    removeButton.className = 'btn btn-sm btn-outline-danger py-0 px-1 flex-shrink-0';
+    removeButton.textContent = '×';
+    removeButton.title = 'Remove colour';
+    removeButton.addEventListener('click', () => removeColour(key, cars, listElement, onCarColorToggle));
 
-    row.append(checkbox, swatch, label, removeBtn);
-    listEl.appendChild(row);
+    row.append(checkbox, swatch, label, removeButton);
+    listElement.appendChild(row);
   }
 }
 
 /** Populate the profile dropdown with names of all saved profiles. */
-export function populateProfileDropdown(selectEl: HTMLSelectElement): void {
+export function populateProfileDropdown(selectElement: HTMLSelectElement): void {
   const profiles = loadProfiles();
-  const current = selectEl.value;
-  selectEl.innerHTML = '';
+  const currentValue = selectElement.value;
+  selectElement.innerHTML = '';
   for (const name of Object.keys(profiles)) {
-    const opt = document.createElement('option');
-    opt.value = name;
-    opt.textContent = name;
-    selectEl.appendChild(opt);
+    const option = document.createElement('option');
+    option.value = name;
+    option.textContent = name;
+    selectElement.appendChild(option);
   }
-  if (current && profiles[current]) selectEl.value = current;
+  if (currentValue && profiles[currentValue]) selectElement.value = currentValue;
 }
 
 /**
@@ -174,12 +172,12 @@ export function populateProfileDropdown(selectEl: HTMLSelectElement): void {
 export function ensureDefaultProfile(
   cars: CarState[],
   canvas: HTMLCanvasElement,
-  blockedListEl: HTMLElement,
+  blockedListElement: HTMLElement,
 ): string[] | null {
   const profiles = loadProfiles();
-  if (!profiles['Demo']) {
-    saveCurrentProfile('Demo', cars);
+  if (!profiles[DEFAULT_PROFILE_NAME]) {
+    saveCurrentProfile(DEFAULT_PROFILE_NAME, cars);
     return null;
   }
-  return applyProfile('Demo', canvas, blockedListEl);
+  return applyProfile(DEFAULT_PROFILE_NAME, canvas, blockedListElement);
 }
