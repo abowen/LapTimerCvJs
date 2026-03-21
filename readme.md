@@ -40,21 +40,27 @@ Change the cooldown to about 2s slower than the fastest lap
 
 Examples of what will be hard to fine tune for reliable detection
 
+- Lack of light, e.g. indoor without lighting or clouds. Adding a flood light may help
 - Two similar colour cars
 - Car with similar colour to track, such as green car on grass
 - Cars with multiple colours or stickers
 - Camera captures too much of the track and cars are detected in middle of their lap
 
-## Self Hosting
+
+## Development
+
+### AI
+
+Application was vibe coded using Claude for curiosity
+
+Code is borderline unreadable and will look at refactoring to a framework / rewriting it myself
+
+Workflow is to add entries into `plan.md` then type "Complete feature 'ABC'" or "Complete next task"
+
+### Self Hosting
 
 Easiest way is:
 
 - Fork from GitHub as a public repository
 - Enable 'GitHub Pages'
 - Set the root directory to `docs` folder
-
-## AI
-
-Application was vibe coded using Claude for curiosity
-
-Code is borderline unreadable and will look at refactoring to a framework / rewriting it myself

@@ -58,6 +58,7 @@
 - [x] To the left of the `Laps` text, add a drop down that selects available saved Profiles
 - [x] The current colours will be added to a `Default` profile to be saved if it doesn't exist
 - [x] Include the blocked HSV when saving profile
+- [x] Store the currently selected Profile in local storage. When the page loads, use the saved value, or if not found, Demo profile
 
 ## UI Tweaks
 
@@ -92,4 +93,4 @@
 - [x] Hide Available Colours, Configuration and Export and Import by default
 - [x] Add a pop up to confirm deletion of Profile
 - [x] Change the drop down for Cars to be a text field. Add an 'Enabled' checkbox for each car in the Driver Configuration. If it's enabled, include it in the Cars list. All default drivers/colours are enabled by default. Hide those that are not enabled. Keep the current disabling a driver/colour the same
-- [x] Remove "Profile name..." input field. Add two buttons called "Copy" and "Add". "Add" will show a new popup with user to enter in a Profile name, and no drivers/colours. "Copy" will show a new popup with an input field for Profile Name that will create identical driver/colours as existing Profile but under the new name.
+- [x] Remove "Profile name..." input field. Add two buttons called "Copy" and "Add". "Add" will show a new popup with user to enter in a Profile name, and no drivers/colours. "Copy" will show a new popup with an input field for Profile Name that will create identical driver/colours as existing Profile but under the new name

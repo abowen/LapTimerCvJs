@@ -5,6 +5,17 @@ import { destroyCar } from './car';
 import { blockedEntries, addBlockedEntry, clearAllBlockedEntries } from './blocked-ranges';
 
 const STORAGE_KEY = 'lapTimerProfiles';
+const SELECTED_PROFILE_KEY = 'lapTimerSelectedProfile';
+
+/** Save the currently selected profile name to local storage. */
+export function saveSelectedProfile(name: string): void {
+  localStorage.setItem(SELECTED_PROFILE_KEY, name);
+}
+
+/** Load the previously selected profile name, falling back to 'Demo'. */
+export function loadSelectedProfile(): string {
+  return localStorage.getItem(SELECTED_PROFILE_KEY) || 'Demo';
+}
 
 /** A saved profile containing colour configurations, car assignments, and blocked ranges. */
 export interface Profile {

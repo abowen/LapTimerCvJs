@@ -25,6 +25,8 @@ import {
   populateProfileDropdown,
   renderColoursList,
   loadProfiles,
+  saveSelectedProfile,
+  loadSelectedProfile,
 } from './profiles';
 import type { Profile } from './profiles';
 
@@ -136,11 +138,16 @@ async function init(): Promise<void> {
   const profileKeys = ensureDefaultProfile(cars, canvas, blockedListEl);
   if (profileKeys) rebuildCarsFromKeys(profileKeys);
   populateProfileDropdown(profileSelect);
-  profileSelect.value = 'Demo';
+  const savedProfile = loadSelectedProfile();
+  profileSelect.value = savedProfile;
+  // If the saved profile no longer exists, fall back to Demo
+  if (profileSelect.value !== savedProfile) profileSelect.value = 'Demo';
+  switchToProfile(profileSelect.value);
   renderColoursList(coloursListEl, cars, handleColorToggle);
 
   profileSelect.addEventListener('change', () => {
     switchToProfile(profileSelect.value);
+    saveSelectedProfile(profileSelect.value);
   });
 
   saveProfileBtn.addEventListener('click', () => {
@@ -156,6 +163,7 @@ async function init(): Promise<void> {
     saveCurrentProfile(trimmed, cars);
     populateProfileDropdown(profileSelect);
     profileSelect.value = trimmed;
+    saveSelectedProfile(trimmed);
     updateDeleteBtn();
   });
 
@@ -169,6 +177,7 @@ async function init(): Promise<void> {
     saveCurrentProfile(trimmed, cars);
     populateProfileDropdown(profileSelect);
     profileSelect.value = trimmed;
+    saveSelectedProfile(trimmed);
     renderColoursList(coloursListEl, cars, handleColorToggle);
     updateDeleteBtn();
   });
@@ -233,6 +242,7 @@ async function init(): Promise<void> {
     if (first) {
       profileSelect.value = first;
       switchToProfile(first);
+      saveSelectedProfile(first);
     }
     updateDeleteBtn();
   });
