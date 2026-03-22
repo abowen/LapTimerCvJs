@@ -1,18 +1,15 @@
-import type { CarState, DetectedRect } from './types';
-import { COLOR_CONFIGS } from './config';
-import { hsvToRgb } from './utils';
+import type { DetectedRect, ColorConfig } from '../types';
+import { hsvToRgb } from '../utils/color';
 
-// ---------------------------------------------------------------------------
 // Overlay drawing constants
-// ---------------------------------------------------------------------------
-const RECT_FILL_ALPHA          = '1f';           // ~12% opacity fill
+const RECT_FILL_ALPHA          = '1f';
 const RECT_BORDER_WIDTH        = 3;
 const AREA_FONT_MIN            = 11;
 const AREA_FONT_MAX            = 16;
-const AREA_FONT_DIVISOR        = 8;              // fontSize = rectWidth / divisor
+const AREA_FONT_DIVISOR        = 8;
 const AREA_LABEL_BG            = 'rgba(0,0,0,0.55)';
 
-const COUNTDOWN_FONT_SCALE     = 0.45;           // fraction of canvas short side
+const COUNTDOWN_FONT_SCALE     = 0.45;
 const COUNTDOWN_SHADOW_COLOR   = 'rgba(0,0,0,0.65)';
 const COUNTDOWN_SHADOW_OFFSET  = 4;
 const COUNTDOWN_TEXT_COLOR     = '#ffe600';
@@ -20,8 +17,8 @@ const COUNTDOWN_TEXT_COLOR     = '#ffe600';
 const BANNER_PADDING           = 12;
 const BANNER_FONT_MIN          = 18;
 const BANNER_FONT_MAX          = 48;
-const BANNER_FONT_SCALE        = 0.08;           // fraction of canvas width
-const BANNER_BG_ALPHA          = 'cc';            // ~80% opacity
+const BANNER_FONT_SCALE        = 0.08;
+const BANNER_BG_ALPHA          = 'cc';
 const BANNER_SHADOW_COLOR      = 'rgba(0,0,0,0.5)';
 const BANNER_SHADOW_OFFSET     = 2;
 const BANNER_TEXT_COLOR        = '#ffffff';
@@ -36,10 +33,9 @@ const RANGE_BAR_DEFAULT_WIDTH  = 150;
 /** Draw bounding-box overlays for detected regions on the camera canvas. */
 export function drawDetectionOverlay(
   ctx: CanvasRenderingContext2D,
-  car: CarState,
+  colorConfig: ColorConfig,
   rects: DetectedRect[],
 ): void {
-  const colorConfig = COLOR_CONFIGS[car.configKey];
   for (const rect of rects) {
     ctx.fillStyle   = colorConfig.badgeColor + RECT_FILL_ALPHA;
     ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
@@ -107,18 +103,19 @@ export function drawWinnerBanner(
   ctx.restore();
 }
 
-/** Draw the HSV colour range preview bar inside a car column header. */
-export function drawCarRangeBar(car: CarState): void {
-  const colorConfig  = COLOR_CONFIGS[car.configKey];
-  const barCtx       = car.rangeCanvasElement.getContext('2d')!;
-  const canvasWidth  = car.rangeCanvasElement.offsetWidth || RANGE_BAR_DEFAULT_WIDTH;
-  const gradientHeight = car.rangeCanvasElement.height - RANGE_BAR_LABEL_HEIGHT;
-  car.rangeCanvasElement.width = canvasWidth;
+/** Draw the HSV colour range preview bar on a canvas element. */
+export function drawCarRangeBar(
+  rangeCanvas: HTMLCanvasElement,
+  colorConfig: ColorConfig,
+): void {
+  const barCtx       = rangeCanvas.getContext('2d')!;
+  const canvasWidth  = rangeCanvas.offsetWidth || RANGE_BAR_DEFAULT_WIDTH;
+  const gradientHeight = rangeCanvas.height - RANGE_BAR_LABEL_HEIGHT;
+  rangeCanvas.width = canvasWidth;
 
   const midSaturation = Math.round((colorConfig.sMin + colorConfig.sMax) / 2);
   const midValue      = Math.round((colorConfig.vMin + colorConfig.vMax) / 2);
 
-  // Draw horizontal HSV gradient
   for (let x = 0; x < canvasWidth; x++) {
     const hueValue = colorConfig.hMin + ((colorConfig.hMax - colorConfig.hMin) * x) / canvasWidth;
     const [r, g, b] = hsvToRgb(hueValue, midSaturation, midValue);
@@ -126,7 +123,6 @@ export function drawCarRangeBar(car: CarState): void {
     barCtx.fillRect(x, 0, 1, gradientHeight);
   }
 
-  // Draw left/right border markers
   barCtx.strokeStyle = RANGE_BAR_BORDER_COLOR;
   barCtx.lineWidth   = RANGE_BAR_BORDER_WIDTH;
   barCtx.beginPath();
@@ -134,7 +130,6 @@ export function drawCarRangeBar(car: CarState): void {
   barCtx.moveTo(canvasWidth - 1, 0);  barCtx.lineTo(canvasWidth - 1, gradientHeight);
   barCtx.stroke();
 
-  // Draw HSV range label below gradient
   barCtx.fillStyle    = RANGE_BAR_LABEL_BG;
   barCtx.fillRect(0, gradientHeight, canvasWidth, RANGE_BAR_LABEL_HEIGHT);
   barCtx.fillStyle    = colorConfig.labelColor;

@@ -26,14 +26,19 @@ export interface DetectedRect {
 /** Race lifecycle stages. */
 export type RaceState = 'idle' | 'countdown' | 'running';
 
-/** Per-car runtime state including detection, timing, and DOM references. */
-export interface CarState {
+/** Minimum and maximum HSV values for each channel. */
+export interface HsvRange {
+  hMin: number; hMax: number;
+  sMin: number; sMax: number;
+  vMin: number; vMax: number;
+}
+
+/** Per-car runtime state (reactive display + internal detection state). */
+export interface CarData {
+  /** Unique instance id. */
+  id:                       string;
   /** Key into COLOR_CONFIGS identifying this car's colour. */
   configKey:                string;
-  /** OpenCV lower HSV bound matrix (allocated per-canvas). */
-  lowerBound:               Mat | null;
-  /** OpenCV upper HSV bound matrix (allocated per-canvas). */
-  upperBound:               Mat | null;
   /** Whether this car's detection is currently disabled. */
   disabled:                 boolean;
   /** Number of laps completed so far in the current race. */
@@ -50,14 +55,38 @@ export interface CarState {
   lastDetectedRects:        DetectedRect[];
   /** performance.now() timestamp of the last successful detection. */
   lastDetectionTimestampMs: number;
+  /** List of lap time display strings (most recent first). */
+  lapTimes:                 string[];
+  /** Whether to show the "Detected!" badge. */
+  showDetectionBadge:       boolean;
+  /** Whether to show the "Cooldown" badge. */
+  showCooldownBadge:        boolean;
+}
 
-  // DOM element references
-  columnElement:        HTMLDivElement;
-  labelElement:         HTMLSpanElement;
-  rangeCanvasElement:   HTMLCanvasElement;
-  timerElement:         HTMLDivElement;
-  detectionBadge:       HTMLSpanElement;
-  cooldownBadge:        HTMLSpanElement;
-  lapListElement:       HTMLDivElement;
-  disableButton:        HTMLButtonElement;
+/** OpenCV HSV bound matrices for a car (managed outside reactive state). */
+export interface CarBounds {
+  lowerBound: Mat;
+  upperBound: Mat;
+}
+
+/** A blocked HSV range with pre-allocated OpenCV bound matrices. */
+export interface BlockedEntry {
+  range:      HsvRange;
+  lowerBound: Mat;
+  upperBound: Mat;
+}
+
+/** A saved profile containing colour configurations, car assignments, and blocked ranges. */
+export interface Profile {
+  colors: Record<string, ColorConfig>;
+  carAssignments: string[];
+  blockedRanges?: HsvRange[];
+}
+
+/** A single recorded lap. */
+export interface LapRecord {
+  driver: string;
+  lapTimeMs: number;
+  timestamp: number;
+  profile?: string;
 }

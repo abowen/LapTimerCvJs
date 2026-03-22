@@ -7,6 +7,7 @@
 - Use TypeScript strict mode
 - Prefer functional components over class components
 - Always add JSDoc comments for public APIs
+- Use `./github/rule-vue-coding-standards.md` for UI coding standards
 
 ## Workflow
 - If ask to complete a task or feature, check the `plan.md` in root directory first

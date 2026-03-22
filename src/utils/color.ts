@@ -1,21 +1,3 @@
-/** Create a typed DOM element with an optional CSS class string. */
-export function createElement<K extends keyof HTMLElementTagNameMap>(
-  tag: K,
-  className = '',
-): HTMLElementTagNameMap[K] {
-  const node = document.createElement(tag);
-  if (className) node.className = className;
-  return node;
-}
-
-/** Format milliseconds as a SS.mmm stopwatch string. */
-export function formatTime(ms: number): string {
-  const clampedMs = Math.max(0, ms);
-  const seconds   = Math.floor(clampedMs / 1000);
-  const millis    = Math.floor(clampedMs % 1000);
-  return `${String(seconds).padStart(2, '0')}.${String(millis).padStart(3, '0')}`;
-}
-
 /**
  * Convert OpenCV HSV (H 0–179, S/V 0–255) to sRGB (0–255 each).
  * Uses the standard HSV-to-RGB sector-based conversion algorithm.
@@ -41,15 +23,15 @@ export function hsvToRgb(h: number, s: number, v: number): [number, number, numb
   ];
 }
 
-const SPEECH_RATE  = 0.9;
-const SPEECH_PITCH = 1.0;
-
-/** Speak text via the Web Speech API, cancelling any previous speech. No-op if unavailable. */
-export function speakText(text: string): void {
-  if (!('speechSynthesis' in window)) return;
-  window.speechSynthesis.cancel();
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.rate  = SPEECH_RATE;
-  utterance.pitch = SPEECH_PITCH;
-  window.speechSynthesis.speak(utterance);
+/** Derive a hex badge color and contrasting label color from an HSV range midpoint. */
+export function deriveColors(hMin: number, hMax: number, sMin: number, sMax: number, vMin: number, vMax: number): { badgeColor: string; labelColor: string } {
+  const midH = Math.round((hMin + hMax) / 2);
+  const midS = Math.round((sMin + sMax) / 2);
+  const midV = Math.round((vMin + vMax) / 2);
+  const [r, g, b] = hsvToRgb(midH, midS, midV);
+  const toHex = (value: number) => value.toString(16).padStart(2, '0');
+  const badgeColor = `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+  const luminance  = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  const labelColor = luminance > 0.5 ? '#333333' : '#ffffff';
+  return { badgeColor, labelColor };
 }
