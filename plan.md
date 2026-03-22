@@ -86,6 +86,7 @@
 - [x] Add a button at the bottom of the last panel with 'Clear All' which will clear all drivers times from local storage
 - [x] Add a new panel at the bottom of the page showing the top 5 fastest times per driver in the same format
 - [x] Add a button next to each driver's name in the last panel to clear that drivers time from local storage with word 'Clear' in the button
+- [x] Associate best laps to per profile. i.e. Changing profiles will show only best laps for that profile
 
 ## UX Tweaks
 

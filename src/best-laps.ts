@@ -6,6 +6,14 @@ const TOP_PER_DRIVER_LAPS_COUNT = 5;
 const RANK_COLUMN_MIN_WIDTH    = '24px';
 const DRIVER_COLUMN_MIN_WIDTH  = '90px';
 
+/** The currently active profile name — lap records are tagged with this. */
+let activeProfileName = '';
+
+/** Set the active profile name used when recording and filtering laps. */
+export function setActiveProfile(profileName: string): void {
+  activeProfileName = profileName;
+}
+
 /** A single recorded lap. */
 export interface LapRecord {
   /** Driver name (typically the colour label). */
@@ -14,16 +22,25 @@ export interface LapRecord {
   lapTimeMs: number;
   /** Unix timestamp (ms) when the lap was recorded. */
   timestamp: number;
+  /** Profile name the lap was recorded under. */
+  profile?: string;
 }
 
 /** Load all lap records from localStorage. */
-export function loadLapRecords(): LapRecord[] {
+function loadAllLapRecords(): LapRecord[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY_BEST_LAPS);
     return raw ? JSON.parse(raw) : [];
   } catch {
     return [];
   }
+}
+
+/** Load lap records filtered to the currently active profile. */
+export function loadLapRecords(): LapRecord[] {
+  return loadAllLapRecords().filter(
+    lapRecord => lapRecord.profile === activeProfileName,
+  );
 }
 
 /** Persist lap records to localStorage. */
@@ -39,22 +56,27 @@ export function onLapRecorded(callback: () => void): void {
   onRecordCallback = callback;
 }
 
-/** Record a new lap. */
+/** Record a new lap under the currently active profile. */
 export function recordLap(driver: string, lapTimeMs: number): void {
-  const records = loadLapRecords();
-  records.push({ driver, lapTimeMs, timestamp: Date.now() });
+  const records = loadAllLapRecords();
+  records.push({ driver, lapTimeMs, timestamp: Date.now(), profile: activeProfileName });
   persistLapRecords(records);
   onRecordCallback?.();
 }
 
-/** Clear all lap records. */
+/** Clear all lap records for the currently active profile. */
 export function clearAllLapRecords(): void {
-  localStorage.removeItem(STORAGE_KEY_BEST_LAPS);
+  const records = loadAllLapRecords().filter(
+    lapRecord => lapRecord.profile !== activeProfileName,
+  );
+  persistLapRecords(records);
 }
 
-/** Clear lap records for a specific driver. */
+/** Clear lap records for a specific driver within the currently active profile. */
 export function clearDriverLapRecords(driver: string): void {
-  const records = loadLapRecords().filter(lapRecord => lapRecord.driver !== driver);
+  const records = loadAllLapRecords().filter(
+    lapRecord => !(lapRecord.profile === activeProfileName && lapRecord.driver === driver),
+  );
   persistLapRecords(records);
 }
 

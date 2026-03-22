@@ -16,6 +16,7 @@ import {
   renderOverallBestLaps,
   renderPerDriverBestLaps,
   onLapRecorded,
+  setActiveProfile,
 } from './best-laps';
 import {
   ensureDefaultProfile,
@@ -92,11 +93,22 @@ function handleColorToggle(colorKey: string, enabled: boolean): void {
   }
 }
 
-/** Apply a profile, rebuild cars, and re-render the colours list. */
+/** Refresh the best laps panels for the currently active profile. */
+function refreshBestLaps(): void {
+  renderOverallBestLaps(bestOverallLapsList);
+  renderPerDriverBestLaps(bestPerDriverLapsList, (driverName) => {
+    clearDriverLapRecords(driverName);
+    refreshBestLaps();
+  });
+}
+
+/** Apply a profile, rebuild cars, and re-render the colours list and best laps. */
 function switchToProfile(profileName: string): void {
   const colorKeys = applyProfile(profileName, canvas, blockedListElement);
   if (colorKeys) rebuildCarsFromKeys(colorKeys);
   renderColoursList(colorsListElement, cars, handleColorToggle);
+  setActiveProfile(profileName);
+  refreshBestLaps();
 }
 
 // ---------------------------------------------------------------------------
@@ -298,16 +310,6 @@ async function init(): Promise<void> {
     reader.readAsText(file);
   });
 
-  // Best Laps panels
-  function refreshBestLaps(): void {
-    renderOverallBestLaps(bestOverallLapsList);
-    renderPerDriverBestLaps(bestPerDriverLapsList, (driverName) => {
-      clearDriverLapRecords(driverName);
-      refreshBestLaps();
-    });
-  }
-
-  refreshBestLaps();
   onLapRecorded(refreshBestLaps);
 
   clearAllLapsButton.addEventListener('click', () => {
