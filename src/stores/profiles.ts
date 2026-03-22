@@ -3,6 +3,7 @@ import { ref } from 'vue';
 import type { Profile, CarData } from '../types';
 import { useConfigStore, STORAGE_KEY_PROFILES, STORAGE_KEY_SELECTED_PROFILE, DEFAULT_PROFILE_NAME } from './config';
 import { useBlockedRangesStore } from './blockedRanges';
+import { useRaceStore } from './race';
 
 export const useProfilesStore = defineStore('profiles', () => {
   const selectedProfile = ref(DEFAULT_PROFILE_NAME);
@@ -35,10 +36,11 @@ export const useProfilesStore = defineStore('profiles', () => {
     return saved;
   }
 
-  /** Save the current colour configs, car assignments, and blocked ranges as a named profile. */
+  /** Save the current colour configs, car assignments, blocked ranges, and settings as a named profile. */
   function saveCurrentProfile(name: string, cars: CarData[]) {
     const config = useConfigStore();
     const blocked = useBlockedRangesStore();
+    const race = useRaceStore();
     const profiles = loadProfiles();
     const colors: Record<string, import('../types').ColorConfig> = {};
     for (const [key, cfg] of Object.entries(config.colorConfigs)) {
@@ -48,6 +50,12 @@ export const useProfilesStore = defineStore('profiles', () => {
       colors,
       carAssignments: cars.map(car => car.configKey),
       blockedRanges: blocked.entries.map(e => ({ ...e.range })),
+      settings: {
+        minArea:       config.minArea,
+        cooldownMs:    config.cooldownMs,
+        hsvSampleSize: config.hsvSampleSize,
+        lapsTarget:    race.lapsTarget,
+      },
     };
     persistProfiles(profiles);
   }
@@ -60,7 +68,7 @@ export const useProfilesStore = defineStore('profiles', () => {
   }
 
   /**
-   * Apply a saved profile: replace COLOR_CONFIGS and restore blocked HSV ranges.
+   * Apply a saved profile: replace COLOR_CONFIGS, restore blocked HSV ranges, and apply settings.
    * Returns the list of enabled car assignment keys, or null if profile not found.
    */
   function applyProfile(
@@ -74,6 +82,7 @@ export const useProfilesStore = defineStore('profiles', () => {
 
     const config = useConfigStore();
     const blocked = useBlockedRangesStore();
+    const race = useRaceStore();
 
     config.replaceColorConfigs(profile.colors);
 
@@ -82,6 +91,13 @@ export const useProfilesStore = defineStore('profiles', () => {
       for (const range of profile.blockedRanges) {
         blocked.addEntry(range, canvasWidth, canvasHeight);
       }
+    }
+
+    if (profile.settings) {
+      config.minArea       = profile.settings.minArea;
+      config.cooldownMs    = profile.settings.cooldownMs;
+      config.hsvSampleSize = profile.settings.hsvSampleSize;
+      race.lapsTarget      = profile.settings.lapsTarget;
     }
 
     return profile.carAssignments.filter(key => config.colorConfigs[key]);

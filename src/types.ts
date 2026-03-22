@@ -76,11 +76,20 @@ export interface BlockedEntry {
   upperBound: Mat;
 }
 
+/** Profile-level settings for detection configuration. */
+export interface ProfileSettings {
+  minArea:       number;
+  cooldownMs:    number;
+  hsvSampleSize: number;
+  lapsTarget:    number;
+}
+
 /** A saved profile containing colour configurations, car assignments, and blocked ranges. */
 export interface Profile {
   colors: Record<string, ColorConfig>;
   carAssignments: string[];
   blockedRanges?: HsvRange[];
+  settings?: ProfileSettings;
 }
 
 /** A single recorded lap. */
