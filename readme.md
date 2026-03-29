@@ -33,8 +33,9 @@ See `Configuration` panel for configuring laps and detection settings.
 ### Tips
 
 - When selecting car, avoid tapping on shadows/dark stickers
-- Use the configuration values, such as minimum detection size for camera location. 6000px2 seems to be good for 1.0-1.5m away from cars driving by
+- Use the configuration values, such as minimum detection size for camera location. 500px2 seems to be good for 1.0-1.5m away from cars driving by
 - Change the cooldown to about 2s slower than the fastest lap
+- Use a high FPS camera. Too slow and it will miss the cars driving through
 
 Examples of what will be hard to fine tune for reliable detection
 

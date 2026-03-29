@@ -55,6 +55,7 @@ export const useProfilesStore = defineStore('profiles', () => {
         cooldownMs:    config.cooldownMs,
         hsvSampleSize: config.hsvSampleSize,
         lapsTarget:    race.lapsTarget,
+        fps:           config.fps,
       },
     };
     persistProfiles(profiles);
@@ -98,6 +99,7 @@ export const useProfilesStore = defineStore('profiles', () => {
       config.cooldownMs    = profile.settings.cooldownMs;
       config.hsvSampleSize = profile.settings.hsvSampleSize;
       race.lapsTarget      = profile.settings.lapsTarget;
+      if (profile.settings.fps !== undefined) config.fps = profile.settings.fps;
     }
 
     return profile.carAssignments.filter(key => config.colorConfigs[key]);

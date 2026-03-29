@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useConfigStore } from '../stores/config';
+import { useConfigStore, FPS_OPTIONS } from '../stores/config';
 import { useRaceStore } from '../stores/race';
 
 const config = useConfigStore();
@@ -43,6 +43,16 @@ const race   = useRaceStore();
                    class="form-control form-control-sm"
                    min="1" max="200"
                    v-model.number="config.hsvSampleSize">
+          </div>
+        </div>
+        <div class="row g-2 mt-1">
+          <div class="col-3">
+            <label for="cfg-fps" class="form-label small mb-1">Camera FPS</label>
+            <select id="cfg-fps"
+                    class="form-select form-select-sm"
+                    v-model.number="config.fps">
+              <option v-for="opt in FPS_OPTIONS" :key="opt" :value="opt">{{ opt }}</option>
+            </select>
           </div>
         </div>
       </div>

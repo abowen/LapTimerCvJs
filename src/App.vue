@@ -13,6 +13,7 @@ import BestLapsOverall from './components/BestLapsOverall.vue';
 import BestLapsPerDriver from './components/BestLapsPerDriver.vue';
 import BlockedRanges from './components/BlockedRanges.vue';
 import ConfigPanel from './components/ConfigPanel.vue';
+import DebugPanel from './components/DebugPanel.vue';
 
 const cars     = useCarsStore();
 const profiles = useProfilesStore();
@@ -117,6 +118,7 @@ onMounted(async () => {
     <BestLapsPerDriver />
     <BlockedRanges />
     <ConfigPanel />
+    <DebugPanel :video-ref="videoRef" />
 
     <p class="text-center text-muted mt-1 small mb-0">{{ status }}</p>
   </main>

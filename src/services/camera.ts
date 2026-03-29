@@ -3,6 +3,7 @@ export async function startCamera(
   video: HTMLVideoElement,
   canvas: HTMLCanvasElement,
   setStatus: (msg: string) => void,
+  fps?: number,
 ): Promise<void> {
   setStatus('Requesting camera access…');
 
@@ -14,12 +15,14 @@ export async function startCamera(
     canvas.height = video.videoHeight;
   };
 
+  const fpsConstraint = fps ? { ideal: fps } : undefined;
+
   try {
-    await tryStream({ video: { facingMode: 'environment' }, audio: false });
+    await tryStream({ video: { facingMode: 'environment', frameRate: fpsConstraint }, audio: false });
     setStatus('Camera ready — waiting for OpenCV…');
   } catch {
     try {
-      await tryStream({ video: true, audio: false });
+      await tryStream({ video: fpsConstraint ? { frameRate: fpsConstraint } : true, audio: false });
       setStatus('Camera ready (fallback) — waiting for OpenCV…');
     } catch (err) {
       setStatus(`Camera error: ${String(err)}`);

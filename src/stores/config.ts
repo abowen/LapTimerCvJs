@@ -41,10 +41,14 @@ const INITIAL_COLOR_CONFIGS: Record<string, ColorConfig> = {
                hMin: 145, hMax: 170, sMin:  50, sMax: 255, vMin: 120, vMax: 255 },
 };
 
+/** Available FPS options for the camera dropdown. */
+export const FPS_OPTIONS = [15, 24, 30, 60, 120] as const;
+
 export const useConfigStore = defineStore('config', () => {
-  const minArea       = ref(6000);
-  const cooldownMs    = ref(5000);
+  const minArea       = ref(500);
+  const cooldownMs    = ref(9000);
   const hsvSampleSize = ref(50);
+  const fps           = ref(60);
 
   /** Mutable colour profiles — keyed by camelCase colour name. */
   const colorConfigs = reactive<Record<string, ColorConfig>>({ ...INITIAL_COLOR_CONFIGS });
@@ -77,7 +81,7 @@ export const useConfigStore = defineStore('config', () => {
   }
 
   return {
-    minArea, cooldownMs, hsvSampleSize,
+    minArea, cooldownMs, hsvSampleSize, fps,
     colorConfigs,
     replaceColorConfigs, setColorConfig, removeColorConfig, generateColorKey,
   };

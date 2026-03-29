@@ -60,6 +60,7 @@
 - [x] Include the blocked HSV when saving profile
 - [x] Store the currently selected Profile in local storage. When the page loads, use the saved value, or if not found, Demo profile
 - [x] Include the 4 configuration options when Saving, Importing and Exporting Profiles. Ignore backward compatibility issues.
+- [x] Offer a drop down in the configuration to set the frames per second of the camera. Save this configuration to local storage too
 
 ## UI Tweaks
 

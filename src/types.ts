@@ -82,6 +82,7 @@ export interface ProfileSettings {
   cooldownMs:    number;
   hsvSampleSize: number;
   lapsTarget:    number;
+  fps?:          number;
 }
 
 /** A saved profile containing colour configurations, car assignments, and blocked ranges. */
