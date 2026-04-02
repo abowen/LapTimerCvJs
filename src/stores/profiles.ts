@@ -56,6 +56,7 @@ export const useProfilesStore = defineStore('profiles', () => {
         hsvSampleSize: config.hsvSampleSize,
         lapsTarget:    race.lapsTarget,
         fps:           config.fps,
+        qualifying:    race.qualifying,
       },
     };
     persistProfiles(profiles);
@@ -100,6 +101,7 @@ export const useProfilesStore = defineStore('profiles', () => {
       config.hsvSampleSize = profile.settings.hsvSampleSize;
       race.lapsTarget      = profile.settings.lapsTarget;
       if (profile.settings.fps !== undefined) config.fps = profile.settings.fps;
+      race.qualifying      = profile.settings.qualifying ?? false;
     }
 
     return profile.carAssignments.filter(key => config.colorConfigs[key]);

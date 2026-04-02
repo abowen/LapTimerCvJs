@@ -69,6 +69,13 @@ function handleDetection(
   carsStore.addLapTime(car.id, `Lap ${car.lapCount}: ${formatTime(lapTimeMs)}`);
   bestLaps.recordLap(colorConfig.label, lapTimeMs);
 
+  if (race.qualifying) {
+    const seconds = (lapTimeMs / 1000).toFixed(1);
+    speakText(`${colorConfig.label} ${seconds}`);
+    carsStore.resetCarTimer(car.id, config.cooldownMs);
+    return;
+  }
+
   if (car.lapCount >= race.lapsTarget) {
     if (!race.won) {
       race.won         = true;

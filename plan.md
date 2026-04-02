@@ -97,3 +97,7 @@
 - [x] Add a pop up to confirm deletion of Profile
 - [x] Change the drop down for Cars to be a text field. Add an 'Enabled' checkbox for each car in the Driver Configuration. If it's enabled, include it in the Cars list. All default drivers/colours are enabled by default. Hide those that are not enabled. Keep the current disabling a driver/colour the same
 - [x] Remove "Profile name..." input field. Add two buttons called "Copy" and "Add". "Add" will show a new popup with user to enter in a Profile name, and no drivers/colours. "Copy" will show a new popup with an input field for Profile Name that will create identical driver/colours as existing Profile but under the new name
+
+## Qualifying Mode
+
+- [x] Add a `Qualifying` checkbox to Configuration. When enabled: disable laps input and 3-2-1 countdown, and use TTS to read driver name + lap time (1 decimal) instead of lap/win announcements

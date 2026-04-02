@@ -21,7 +21,7 @@ const race   = useRaceStore();
                    class="form-control form-control-sm"
                    min="1" max="99"
                    v-model.number="race.lapsTarget"
-                   :disabled="race.state !== 'idle'">
+                   :disabled="race.state !== 'idle' || race.qualifying">
           </div>
           <div class="col-3">
             <label for="cfg-min-area" class="form-label small mb-1">Min Detection (px²)</label>
@@ -53,6 +53,15 @@ const race   = useRaceStore();
                     v-model.number="config.fps">
               <option v-for="opt in FPS_OPTIONS" :key="opt" :value="opt">{{ opt }}</option>
             </select>
+          </div>
+          <div class="col-3 d-flex align-items-end">
+            <div class="form-check">
+              <input type="checkbox" id="cfg-qualifying"
+                     class="form-check-input"
+                     v-model="race.qualifying"
+                     :disabled="race.state !== 'idle'">
+              <label for="cfg-qualifying" class="form-check-label small">Qualifying</label>
+            </div>
           </div>
         </div>
       </div>

@@ -83,6 +83,7 @@ export interface ProfileSettings {
   hsvSampleSize: number;
   lapsTarget:    number;
   fps?:          number;
+  qualifying?:   boolean;
 }
 
 /** A saved profile containing colour configurations, car assignments, and blocked ranges. */

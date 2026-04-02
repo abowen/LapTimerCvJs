@@ -11,6 +11,7 @@ export const useRaceStore = defineStore('race', () => {
   const state            = ref<RaceState>('idle');
   const countdownValue   = ref(COUNTDOWN_START);
   const lapsTarget       = ref(3);
+  const qualifying       = ref(false);
   const won              = ref(false);
   const winnerLabel      = ref('');
   const winnerColor      = ref('');
@@ -22,14 +23,29 @@ export const useRaceStore = defineStore('race', () => {
   let countdownTimerId: number | null = null;
   const carsDisabledBeforeRace = new Set<string>();
 
-  /** Begin the 3-2-1 countdown, then start all car timers. */
+  /** Begin the 3-2-1 countdown, then start all car timers. In qualifying mode, skip the countdown. */
   function startRace(cars: CarData[], cooldownMs: number) {
-    state.value          = 'countdown';
-    countdownValue.value = COUNTDOWN_START;
     carsDisabledBeforeRace.clear();
     for (const car of cars) {
       if (car.disabled) carsDisabledBeforeRace.add(car.id);
     }
+
+    if (qualifying.value) {
+      state.value = 'running';
+      const now = performance.now();
+      for (const car of cars) {
+        if (!car.disabled) {
+          car.timerStart      = now;
+          car.cooldownUntil   = now + cooldownMs;
+          car.wasInCooldown   = false;
+          car.badgeHoldFrames = 0;
+        }
+      }
+      return;
+    }
+
+    state.value          = 'countdown';
+    countdownValue.value = COUNTDOWN_START;
     speakText(String(countdownValue.value));
 
     countdownTimerId = window.setInterval(() => {
@@ -84,7 +100,7 @@ export const useRaceStore = defineStore('race', () => {
   }
 
   return {
-    state, countdownValue, lapsTarget,
+    state, countdownValue, lapsTarget, qualifying,
     won, winnerLabel, winnerColor, lastAnnouncedLap,
     frameTimestamp,
     carsDisabledBeforeRace,
